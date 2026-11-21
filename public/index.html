@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Broiler Management System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="overlay-backdrop" id="backdrop" onclick="toggleSidebar()"></div>
+
+    <!-- LOGIN OVERLAY -->
+    <div id="loginOverlay">
+        <div class="login-card">
+            <div style="font-size: 3rem; color: #10b981; margin-bottom: 10px;"><i class="fa-solid fa-feather"></i></div>
+            <h2>Broiler Management</h2>
+            <form id="loginForm">
+                <div class="form-group" style="text-align: left;">
+                    <label>User ID</label>
+                    <input type="text" id="loginUserId" placeholder="Admin ID Daalein" required>
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" placeholder="Password Daalein" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 10px;">Login</button>
+            </form>
+            <div id="loginMsg" class="response-msg"></div>
+        </div>
+    </div>
+
+    <!-- FARMER LEDGER MODAL -->
+    <div id="ledgerModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:white; width:90%; max-width:1000px; max-height:90vh; overflow-y:auto; padding:20px; border-radius:8px; position:relative;">
+            <button onclick="closeLedgerModal()" style="position:absolute; top:15px; right:15px; background:#ef4444; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px;"><i class="fa-solid fa-xmark"></i></button>
+            <h3 id="modalFarmerTitle" style="margin-bottom:15px; color:#1e293b;">Farmer Ledger History</h3>
+            <div id="modalFarmerInfo" style="margin-bottom:15px; font-size:0.9rem; color:#475569; background:#f1f5f9; padding:10px; border-radius:6px;"></div>
+            <div class="data-table-container">
+                <table class="data-table" id="modalLedgerTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Age</th>
+                            <th>Day Mort.</th>
+                            <th>Total Mort.</th>
+                            <th>Live Chicks</th>
+                            <th>Avg Wt (g)</th>
+                            <th>Total Wt (KG)</th>
+                            <th>Feed (KG)</th>
+                            <th>FCR</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalLedgerBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:15px; text-align:right;">
+                <button onclick="exportTableToExcel('modalLedgerTable', 'Farmer_Ledger')" class="btn btn-primary" style="background:#059669;"><i class="fa-solid fa-file-excel"></i> Export Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-brand"><i class="fa-solid fa-kiwi-bird"></i><span class="menu-text">Broiler Pro</span></div>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a class="menu-item active" onclick="switchTab('dashTab', this)"><i class="fa-solid fa-chart-line"></i><span class="menu-text">Dashboard</span></a></li>
+            
+            <!-- MASTER CREATION DROPDOWN -->
+            <li class="menu-dropdown">
+                <div class="menu-title-toggle" onclick="toggleSubMenu(this)">
+                    <span><i class="fa-solid fa-layer-group" style="width: 20px;"></i> Master Creation</span>
+                    <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                </div>
+                <ul class="submenu">
+                    <li><a class="menu-item" onclick="switchTab('branchTab', this)"><i class="fa-solid fa-code-branch"></i><span class="menu-text">Branch Master</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('userTab', this)"><i class="fa-solid fa-users-gear"></i><span class="menu-text">User Creation</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('farmerTab', this)"><i class="fa-solid fa-tractor"></i><span class="menu-text">Farmer Creation</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('traderTab', this)"><i class="fa-solid fa-truck-field"></i><span class="menu-text">Trader Creation</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('itemTab', this)"><i class="fa-solid fa-boxes-stacked"></i><span class="menu-text">Item Creation</span></a></li>
+                </ul>
+            </li>
+            
+            <!-- TRANSACTIONS DROPDOWN -->
+            <li class="menu-dropdown">
+                <div class="menu-title-toggle" onclick="toggleSubMenu(this)">
+                    <span><i class="fa-solid fa-right-left" style="width: 20px;"></i> Transactions</span>
+                    <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                </div>
+                <ul class="submenu">
+                    <li><a class="menu-item" onclick="switchTab('chicksTab', this)"><i class="fa-solid fa-egg"></i><span class="menu-text">Chicks Placement</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('feedTab', this)"><i class="fa-solid fa-wheat-awn"></i><span class="menu-text">Feed Dispatch</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('dailyEntryTab', this)"><i class="fa-solid fa-clipboard-list"></i><span class="menu-text">Daily Farm Log</span></a></li>
+                </ul>
+            </li>
+
+            <!-- REPORTS DROPDOWN -->
+            <li class="menu-dropdown">
+                <div class="menu-title-toggle" onclick="toggleSubMenu(this)">
+                    <span><i class="fa-solid fa-chart-pie" style="width: 20px;"></i> Reports</span>
+                    <i class="fa-solid fa-chevron-down arrow-icon"></i>
+                </div>
+                <ul class="submenu">
+                    <li><a class="menu-item" onclick="switchTab('branchReportTab', this)"><i class="fa-solid fa-building-columns"></i><span class="menu-text">Branch Wise</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('supervisorReportTab', this)"><i class="fa-solid fa-user-tie"></i><span class="menu-text">Supervisor Wise</span></a></li>
+                    <li><a class="menu-item" onclick="switchTab('farmerReportTab', this)"><i class="fa-solid fa-address-book"></i><span class="menu-text">Farmer Wise</span></a></li>
+                </ul>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="main-wrapper">
+        <header class="top-navbar">
+            <button class="toggle-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+            <div class="user-profile">
+                <div class="user-avatar" id="avatarIcon">A</div>
+                <div>
+                    <div style="font-weight: 600; font-size: 0.9rem;" id="userDisplayName">Not Logged In</div>
+                    <div style="font-size: 0.75rem; color: #64748b;" id="userRoleBadge">-</div>
+                </div>
+                <button onclick="logout()" class="btn btn-danger" style="padding: 6px 12px; margin-left: 10px;"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </header>
+
+        <main class="content-area">
+            <section id="dashTab" class="page-section active">
+                <div class="card"><div class="card-header"><h3 class="card-title">Dashboard Overview</h3></div><p>Left Menu se Master Data, Transactions aur Reports access karein.</p></div>
+            </section>
+
+            <!-- BRANCH MASTER -->
+            <section id="branchTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Branch Master</h3></div>
+                    <form id="branchForm">
+                        <input type="hidden" id="editBranchId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>Branch Name</label><input type="text" id="branchName" required oninput="generateBranchCode()"></div>
+                            <div class="form-group"><label>Branch Code (Auto)</label><input type="text" id="branchId" readonly style="background:#e2e8f0; font-weight:bold;"></div>
+                            <div class="form-group full-width"><label>Address</label><input type="text" id="branchAddress" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="branchSaveBtn">Save Branch</button>
+                    </form>
+                    <div id="branchMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead><tr><th>Code</th><th>Name</th><th>Address</th><th>Action</th></tr></thead>
+                            <tbody id="branchTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- USER CREATION -->
+            <section id="userTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">User Creation</h3></div>
+                    <form id="userForm">
+                        <input type="hidden" id="editUserId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>User Login ID</label><input type="text" id="uId" required></div>
+                            <div class="form-group"><label>Full Name</label><input type="text" id="uName" required></div>
+                            <div class="form-group"><label>Password</label><input type="password" id="uPass" required></div>
+                            <div class="form-group">
+                                <label>Role</label>
+                                <select id="uRole">
+                                    <option value="Admin">Admin</option>
+                                    <option value="Manager">Manager</option>
+                                    <option value="Accountant">Accountant</option>
+                                    <option value="Supervisor">Supervisor</option>
+                                    <option value="Godown Incharge">Godown Incharge</option>
+                                    <option value="Sales Manager">Sales Manager</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Branch</label><select id="uBranch" required><option value="">-- Chunein --</option></select></div>
+                            <div class="form-group"><label>Mobile</label><input type="text" id="uMobile" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="userSaveBtn">Save User</button>
+                    </form>
+                    <div id="userMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead><tr><th>User ID</th><th>Name</th><th>Role</th><th>Branch</th><th>Mobile</th><th>Action</th></tr></thead>
+                            <tbody id="userTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FARMER CREATION -->
+            <section id="farmerTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Farmer Creation</h3></div>
+                    <form id="farmerForm">
+                        <input type="hidden" id="editFarmerId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>Farmer Name</label><input type="text" id="fName" required oninput="generateFarmerId()"></div>
+                            <div class="form-group"><label>Farmer ID (Auto)</label><input type="text" id="fId" readonly style="background:#e2e8f0; font-weight:bold;" required></div>
+                            <div class="form-group"><label>Supervisor</label><select id="fSup" required onchange="autofillBranchFromSupervisor()"><option value="">-- Supervisor Chunein --</option></select></div>
+                            <div class="form-group"><label>Branch (Auto)</label><select id="fBranch" required style="background:#e2e8f0;" disabled><option value="">-- Auto aayegi --</option></select></div>
+                            <div class="form-group"><label>Mobile No</label><input type="text" id="fMobile" required></div>
+                            <div class="form-group"><label>Bank Name</label><input type="text" id="fBank"></div>
+                            <div class="form-group"><label>Account No</label><input type="text" id="fAcc"></div>
+                            <div class="form-group"><label>IFSC Code</label><input type="text" id="fIfsc"></div>
+                            <div class="form-group full-width"><label>Address</label><input type="text" id="fAddress" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="farmerSaveBtn">Save Farmer</button>
+                    </form>
+                    <div id="farmerMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead><tr><th>Farmer ID</th><th>Name</th><th>Supervisor</th><th>Branch</th><th>Mobile</th><th>Action</th></tr></thead>
+                            <tbody id="farmerTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TRADER CREATION -->
+            <section id="traderTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Trader Creation</h3></div>
+                    <form id="traderForm">
+                        <input type="hidden" id="editTraderMongoId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>Trader ID</label><input type="text" id="tId" required></div>
+                            <div class="form-group"><label>Trader Name</label><input type="text" id="tName" required></div>
+                            <div class="form-group"><label>Mobile No</label><input type="text" id="tMobile" required></div>
+                            <div class="form-group full-width"><label>Address</label><input type="text" id="tAddress" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="traderSaveBtn">Save Trader</button>
+                    </form>
+                    <div id="traderMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead><tr><th>Trader ID</th><th>Name</th><th>Mobile</th><th>Address</th><th>Action</th></tr></thead>
+                            <tbody id="traderTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ITEM CREATION -->
+            <section id="itemTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Item Creation</h3></div>
+                    <form id="itemForm">
+                        <input type="hidden" id="editItemMongoId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>Item Code</label><input type="text" id="iId" required></div>
+                            <div class="form-group"><label>Item Name</label><input type="text" id="iName" required></div>
+                            <div class="form-group"><label>Category</label><select id="iCat"><option value="Chicks">Chicks</option><option value="Feed">Feed</option><option value="Medicine">Medicine</option></select></div>
+                            <div class="form-group"><label>Unit</label><input type="text" id="iUnit" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="itemSaveBtn">Save Item</button>
+                    </form>
+                    <div id="itemMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Unit</th><th>Action</th></tr></thead>
+                            <tbody id="itemTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CHICKS PLACEMENT -->
+            <section id="chicksTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Chicks Placement Entry</h3></div>
+                    <form id="chicksForm">
+                        <input type="hidden" id="editPlacementMongoId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>Date</label><input type="date" id="cDate" required></div>
+                            <div class="form-group">
+                                <label>Select Farmer</label>
+                                <select id="cFarmer" required onchange="autofillChicksDetails()">
+                                    <option value="">-- Farmer Chunein --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Supervisor (Auto)</label>
+                                <input type="text" id="cSupName" readonly style="background:#e2e8f0;" placeholder="Auto aayega">
+                            </div>
+                            <div class="form-group">
+                                <label>Branch (Auto)</label>
+                                <input type="text" id="cBranchName" readonly style="background:#e2e8f0;" placeholder="Auto aayega">
+                            </div>
+                            <div class="form-group">
+                                <label>Placement ID (Auto)</label>
+                                <input type="text" id="cPlacementId" readonly style="background:#e2e8f0; font-weight:bold;" required placeholder="Auto Gen">
+                            </div>
+                            <div class="form-group"><label>Chicks Qty (Pcs)</label><input type="number" id="cQty" required></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="chicksSaveBtn">Place Chicks</button>
+                    </form>
+                    <div id="chicksMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead><tr><th>Placement ID</th><th>Date</th><th>Farmer</th><th>Branch</th><th>Qty</th><th>Action</th></tr></thead>
+                            <tbody id="chicksTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FEED DISPATCH -->
+            <section id="feedTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Feed Dispatch Entry</h3></div>
+                    <form id="feedForm">
+                        <input type="hidden" id="editFeedMongoId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>Date</label><input type="date" id="feedDate" required></div>
+                            <div class="form-group"><label>Challan No</label><input type="text" id="challanNo" required></div>
+                            <div class="form-group">
+                                <label>Select Farmer</label>
+                                <select id="feedFarmer" required onchange="autofillFeedDetails()">
+                                    <option value="">-- Farmer Chunein --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Supervisor (Auto)</label>
+                                <input type="text" id="feedSupName" readonly style="background:#e2e8f0;" placeholder="Auto aayega">
+                            </div>
+                            <div class="form-group">
+                                <label>Branch (Auto)</label>
+                                <input type="text" id="feedBranchName" readonly style="background:#e2e8f0;" placeholder="Auto aayega">
+                            </div>
+                            <div class="form-group">
+                                <label>Feed Type (Item Master)</label>
+                                <select id="feedType" required>
+                                    <option value="">-- Feed Type Chunein --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Quantity (KG) <span id="bagCalcText" style="color: #10b981; font-weight: 600; float: right;"></span></label>
+                                <input type="number" id="qtyKg" required oninput="calculateBags()">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="feedSaveBtn">Send Feed Dispatch</button>
+                    </form>
+                    <div id="feedMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead><tr><th>Challan No</th><th>Date</th><th>Farmer</th><th>Feed Type</th><th>Qty (KG)</th><th>Bags</th><th>Status</th><th>Action</th></tr></thead>
+                            <tbody id="feedTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- DAILY LOG ENTRY -->
+            <section id="dailyEntryTab" class="page-section">
+                <div class="card">
+                    <div class="card-header"><h3 class="card-title">Daily Farm Log Entry</h3></div>
+                    <form id="dailyEntryForm">
+                        <input type="hidden" id="editDailyMongoId">
+                        <div class="form-grid">
+                            <div class="form-group"><label>Date</label><input type="date" id="dailyDate" required></div>
+                            <div class="form-group">
+                                <label>Select Farmer</label>
+                                <select id="dailyFarmer" required onchange="autofillDailyDetails()">
+                                    <option value="">-- Farmer Chunein --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Supervisor (Auto)</label>
+                                <input type="text" id="dailySupName" readonly style="background:#e2e8f0;" placeholder="Auto aayega">
+                            </div>
+                            <div class="form-group">
+                                <label>Branch (Auto)</label>
+                                <input type="text" id="dailyBranchName" readonly style="background:#e2e8f0;" placeholder="Auto aayega">
+                            </div>
+                            <div class="form-group"><label>Day Mortality</label><input type="number" id="dMort" required value="0"></div>
+                            <div class="form-group"><label>Day Feed Consume (KG)</label><input type="number" id="dFeed" required value="0"></div>
+                            <div class="form-group"><label>Avg Weight (Gram)</label><input type="number" id="dBw" placeholder="Optional"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="dailySaveBtn">Submit Daily Log & Calculate FCR</button>
+                    </form>
+                    <div id="dailyEntryMsg" class="response-msg"></div>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Farmer</th>
+                                    <th>Age</th>
+                                    <th>Placement Qty</th>
+                                    <th>Day Mort.</th>
+                                    <th>Total Mort. (%)</th>
+                                    <th>Live Chicks</th>
+                                    <th>Avg Wt (g)</th>
+                                    <th>Total Wt (KG)</th>
+                                    <th>Total Feed</th>
+                                    <th>FCR</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- BRANCH WISE REPORT TAB -->
+            <section id="branchReportTab" class="page-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Branch Wise Summary Report</h3>
+                        <div>
+                            <button onclick="exportTableToExcel('branchReportTable', 'Branch_Wise_Report')" class="btn btn-primary" style="background:#059669; padding:6px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-excel"></i> Excel</button>
+                            <button onclick="exportTableToPDF('Branch Wise Report', 'branchReportTable')" class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-bottom: 15px;">
+                        <div class="form-group">
+                            <label>Select Branch</label>
+                            <select id="reportBranchSelect" onchange="loadReportData('branch')">
+                                <option value="">-- Sabhi Branches --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="data-table-container">
+                        <table class="data-table" id="branchReportTable">
+                            <thead>
+                                <tr>
+                                    <th>Farmer Name</th>
+                                    <th>Branch</th>
+                                    <th>Supervisor</th>
+                                    <th>Age</th>
+                                    <th>Placement Qty</th>
+                                    <th>Total Mort. (%)</th>
+                                    <th>Live Chicks</th>
+                                    <th>Avg Wt (g)</th>
+                                    <th>Total Wt (KG)</th>
+                                    <th>Total Feed (KG)</th>
+                                    <th>FCR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="branchReportTableBody"></tbody>
+                            <tfoot id="branchReportTableFoot" style="font-weight:bold; background:#f8fafc;"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SUPERVISOR WISE REPORT TAB -->
+            <section id="supervisorReportTab" class="page-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Supervisor Wise Summary Report</h3>
+                        <div>
+                            <button onclick="exportTableToExcel('supervisorReportTable', 'Supervisor_Wise_Report')" class="btn btn-primary" style="background:#059669; padding:6px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-excel"></i> Excel</button>
+                            <button onclick="exportTableToPDF('Supervisor Wise Report', 'supervisorReportTable')" class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-bottom: 15px;">
+                        <div class="form-group">
+                            <label>Select Supervisor</label>
+                            <select id="reportSupSelect" onchange="loadReportData('supervisor')">
+                                <option value="">-- Sabhi Supervisors --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="data-table-container">
+                        <table class="data-table" id="supervisorReportTable">
+                            <thead>
+                                <tr>
+                                    <th>Farmer Name</th>
+                                    <th>Supervisor</th>
+                                    <th>Branch</th>
+                                    <th>Age</th>
+                                    <th>Placement Qty</th>
+                                    <th>Total Mort. (%)</th>
+                                    <th>Live Chicks</th>
+                                    <th>Avg Wt (g)</th>
+                                    <th>Total Wt (KG)</th>
+                                    <th>Total Feed (KG)</th>
+                                    <th>FCR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="supervisorReportTableBody"></tbody>
+                            <tfoot id="supervisorReportTableFoot" style="font-weight:bold; background:#f8fafc;"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FARMER WISE REPORT TAB -->
+            <section id="farmerReportTab" class="page-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Farmer Wise Overall Summary Report (Click Farmer for Ledger)</h3>
+                        <div>
+                            <button onclick="exportTableToExcel('farmerReportTable', 'Farmer_Wise_Report')" class="btn btn-primary" style="background:#059669; padding:6px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-excel"></i> Excel</button>
+                            <button onclick="exportTableToPDF('Farmer Wise Report', 'farmerReportTable')" class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+                        </div>
+                    </div>
+                    <div class="data-table-container">
+                        <table class="data-table" id="farmerReportTable">
+                            <thead>
+                                <tr>
+                                    <th>Farmer ID & Name</th>
+                                    <th>Branch</th>
+                                    <th>Supervisor</th>
+                                    <th>Age</th>
+                                    <th>Placement Qty</th>
+                                    <th>Total Mort. (%)</th>
+                                    <th>Live Chicks</th>
+                                    <th>Avg Wt (g)</th>
+                                    <th>Total Wt (KG)</th>
+                                    <th>Total Feed (KG)</th>
+                                    <th>FCR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="farmerReportTableBody"></tbody>
+                            <tfoot id="farmerReportTableFoot" style="font-weight:bold; background:#f8fafc;"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

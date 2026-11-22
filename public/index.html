@@ -663,6 +663,7 @@
                         <li><div class="menu-item" onclick="switchTab('chicksTab', this)"><span class="nav-label">Chicks Placement</span></div></li>
                         <li><div class="menu-item" onclick="switchTab('feedTab', this)"><span class="nav-label">Feed Dispatch</span></div></li>
                         <li><div class="menu-item" onclick="switchTab('dailyEntryTab', this)"><span class="nav-label">Daily Farm Log</span></div></li>
+                        <li><div class="menu-item" onclick="switchTab('saleEntryTab', this)"><span class="nav-label">Sale / Lifting Entry</span></div></li>
                     </ul>
                 </li>
 
@@ -704,7 +705,7 @@
                     <div class="card">
                         <div class="card-title">Welcome to Broiler Management System</div>
                         <p style="color: var(--text-muted); font-size: 14px;">
-                            Left menu se Master Data, Transactions (Chicks Placement, Feed Dispatch, Daily Farm Log), ya Reports open karein.
+                            Left menu se Master Data, Transactions (Chicks Placement, Feed Dispatch, Daily Farm Log, Sale / Lifting Entry), ya Reports open karein.
                         </p>
                     </div>
                 </section>
@@ -1123,6 +1124,139 @@
                     </div>
                 </section>
 
+                <!-- Sale / Bird Lifting Entry -->
+                <section id="saleEntryTab" class="page-section">
+                    <div class="card">
+                        <div class="card-title">Bird Lifting Sheet Cum Invoice (Sale Entry)</div>
+                        <form id="saleEntryForm">
+                            <input type="hidden" id="editSaleMongoId">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="saleSlNo">Sl. No.</label>
+                                    <input type="text" id="saleSlNo" required placeholder="e.g. 3015">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleDate">Date</label>
+                                    <input type="date" id="saleDate" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleSupervisor">Lifting Supervisor</label>
+                                    <select id="saleSupervisor" required></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleTrader">Trader Name (Name of the Party)</label>
+                                    <select id="saleTrader" required></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleFarmer">Farmer Name (Name of the Farmer)</label>
+                                    <select id="saleFarmer" required onchange="autofillSaleFarmerDetails()"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleBranch">Branch</label>
+                                    <input type="text" id="saleBranch" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label for="wtStartTime">Wt. Starting Time</label>
+                                    <input type="time" id="wtStartTime">
+                                </div>
+                                <div class="form-group">
+                                    <label for="wtCloseTime">Wt. Closing Time</label>
+                                    <input type="time" id="wtCloseTime">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleDriver">Driver Name</label>
+                                    <input type="text" id="saleDriver" placeholder="Driver Name">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleVehicle">Vehicles No.</label>
+                                    <input type="text" id="saleVehicle" placeholder="Vehicle Number">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleRate">Rate (₹ / KG)</label>
+                                    <input type="number" step="0.01" id="saleRate" placeholder="0.00">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleAge">Age (Days)</label>
+                                    <input type="number" id="saleAge" placeholder="e.g. 35">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleLsName">L.S. Name</label>
+                                    <input type="text" id="saleLsName" placeholder="Line Supervisor Name">
+                                </div>
+                            </div>
+
+                            <!-- 48 Lifting Weight Rows (1-48) -->
+                            <div style="margin-top: 18px;">
+                                <div style="font-weight: 700; margin-bottom: 8px; font-size: 14px;">
+                                    Lifting Weight Details (1 to 48)
+                                </div>
+                                <div class="table-responsive">
+                                    <table id="liftingInputTable" style="min-width: 820px;">
+                                        <thead>
+                                            <tr>
+                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
+                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
+                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
+                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="liftingInputBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Auto Summary Box -->
+                            <div class="form-grid" style="margin-top: 16px; background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                                <div class="form-group">
+                                    <label>Total Pcs (No. of Birds)</label>
+                                    <input type="text" id="saleTotalPcs" readonly value="0" style="font-weight: 700; color: #2563eb;">
+                                </div>
+                                <div class="form-group">
+                                    <label>Total Weight (Kg)</label>
+                                    <input type="text" id="saleTotalWeight" readonly value="0.00" style="font-weight: 700; color: #059669;">
+                                </div>
+                                <div class="form-group">
+                                    <label>Avg. Body Weight (Kg)</label>
+                                    <input type="text" id="saleAvgBodyWeight" readonly value="0.000" style="font-weight: 700; color: #b45309;">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleFeedClosing">Feed Closing Stock</label>
+                                    <input type="text" id="saleFeedClosing" placeholder="e.g. 0 Bag">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleBirdStock">Bird Stock</label>
+                                    <input type="text" id="saleBirdStock" placeholder="e.g. 0">
+                                </div>
+                                <div class="form-group">
+                                    <label for="saleWeakBirds">Weak Birds</label>
+                                    <input type="text" id="saleWeakBirds" placeholder="e.g. 0">
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" id="saleSaveBtn" class="btn-primary">Save Sale Entry</button>
+                                <button type="button" class="btn-secondary" onclick="resetSaleForm()">Clear Form</button>
+                                <span id="saleMsg" class="status-msg"></span>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">Sale / Bird Lifting History</div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Sl. No.</th><th>Date</th><th>Party (Trader)</th><th>Farmer</th>
+                                        <th>Supervisor</th><th>Total Pcs</th><th>Total Wt (Kg)</th><th>Avg. Body Wt</th><th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="saleTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Branch-wise Report -->
                 <section id="branchReportTab" class="page-section">
                     <div class="card">
@@ -1234,6 +1368,20 @@
                     <tbody id="modalLedgerBody"></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <!-- Lifting Sheet Print Modal -->
+    <div id="liftingPrintModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:3000; align-items:center; justify-content:center; padding:12px; overflow-y:auto;" onclick="if(event.target === this) closePrintModal()">
+        <div style="background:#fff; width:100%; max-width:920px; max-height:92vh; overflow-y:auto; border-radius:10px; padding:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px;">
+                <h3>Bird Lifting Sheet Cum Invoice — Print Preview</h3>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn-primary" onclick="printLiftingSheet()">🖨️ Print Sheet</button>
+                    <button type="button" class="btn-secondary" onclick="closePrintModal()">✕ Close</button>
+                </div>
+            </div>
+            <div id="liftingPrintableArea"></div>
         </div>
     </div>
 

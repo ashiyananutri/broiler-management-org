@@ -1,3 +1,7 @@
+// =======================================================
+// Broiler Management System - public/app.js
+// =======================================================
+
 let allSupervisors = [];
 let allBranches = [];
 let allFarmers = [];
@@ -6,18 +10,223 @@ let allFeedDispatches = [];
 let allSaleEntries = [];
 let currentUser = null;
 
-window.addEventListener('DOMContentLoaded', () => {
-    buildLiftingRows();
+const SESSION_STORAGE_KEY = 'bms_session_v1';
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+let idleTimerId = null;
+let sessionPollId = null;
+
+function getSavedSession() {
+    try {
+        return JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || 'null');
+    } catch (_) {
+        return null;
+    }
+}
+
+function saveSession(sessionData) {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+        ...sessionData,
+        lastActivityAt: Date.now()
+    }));
+}
+
+function clearSavedSession() {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function getAuthHeaders() {
+    const sess = getSavedSession();
+    const headers = {};
+    if (sess && sess.sessionId && sess.user?._id) {
+        headers['x-session-id'] = sess.sessionId;
+        headers['x-user-id'] = sess.user._id;
+    }
+    return headers;
+}
+
+function applyLoggedInUI(user) {
+    currentUser = user;
+    const overlay = document.getElementById('loginOverlay');
+    if (overlay) overlay.style.display = 'none';
+
+    const displayName = user?.fullName || user?.userId || 'User';
+    const nameEl = document.getElementById('userDisplayName');
+    const roleEl = document.getElementById('userRoleBadge');
+    const avatarEl = document.getElementById('avatarIcon');
+
+    if (nameEl) nameEl.textContent = displayName;
+    if (roleEl) roleEl.textContent = user?.role || 'Active';
+    if (avatarEl) avatarEl.textContent = displayName.charAt(0).toUpperCase();
+
     loadDropdownData();
     loadEntriesData();
     loadSaleEntries();
-    setDefaultDates();
     loadReportDropdowns();
+    populateFeedTransferFarmers().catch(() => {});
+    loadFeedTransfers();
+}
+
+function forceLogout(reasonMessage = 'Aap logout ho gaye hain. Kripya dobara login karein.') {
+    currentUser = null;
+    clearSavedSession();
+    if (idleTimerId) clearTimeout(idleTimerId);
+    if (sessionPollId) clearInterval(sessionPollId);
+
+    const nameEl = document.getElementById('userDisplayName');
+    const roleEl = document.getElementById('userRoleBadge');
+    const avatarEl = document.getElementById('avatarIcon');
+    if (nameEl) nameEl.textContent = 'Guest';
+    if (roleEl) roleEl.textContent = 'Not Logged In';
+    if (avatarEl) avatarEl.textContent = 'R';
+
+    const overlay = document.getElementById('loginOverlay');
+    const loginMsg = document.getElementById('loginMsg');
+    if (overlay) overlay.style.display = 'flex';
+    if (loginMsg) {
+        loginMsg.style.color = '#dc2626';
+        loginMsg.textContent = reasonMessage;
+    }
+}
+
+async function logout() {
+    const sess = getSavedSession();
+    try {
+        if (sess && sess.sessionId && sess.user?._id) {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-session-id': sess.sessionId,
+                    'x-user-id': sess.user._id
+                },
+                body: JSON.stringify({ userId: sess.user._id })
+            }).catch(() => {});
+        }
+    } finally {
+        forceLogout('Aap logout ho chuke hain.');
+    }
+}
+
+function resetIdleTimer() {
+    const sess = getSavedSession();
+    if (!sess || !sess.sessionId) return;
+
+    sess.lastActivityAt = Date.now();
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sess));
+
+    if (idleTimerId) clearTimeout(idleTimerId);
+    idleTimerId = setTimeout(() => {
+        forceLogout('5 minute tak koi activity na hone ke karan aap auto-logout ho gaye hain.');
+    }, IDLE_TIMEOUT_MS);
+}
+
+function initActivityListeners() {
+    ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(evt => {
+        window.addEventListener(evt, resetIdleTimer, { passive: true });
+    });
+}
+
+async function apiFetch(url, options = {}) {
+    const res = await fetch(url, {
+        ...options,
+        headers: {
+            ...getAuthHeaders(),
+            ...(options.headers || {})
+        }
+    });
+
+    if (res.status === 401 && !url.includes('/api/auth/login')) {
+        const errData = await res.json().catch(() => ({}));
+        forceLogout(errData.error || errData.message || 'Session expire ya kisi aur device par login ho gaya hai.');
+    }
+
+    return res;
+}
+
+async function handleLoginSubmit(e) {
+    e.preventDefault();
+    const userId = document.getElementById('loginUserId')?.value?.trim();
+    const password = document.getElementById('loginPassword')?.value || '';
+    const msgEl = document.getElementById('loginMsg');
+
+    try {
+        if (msgEl) {
+            msgEl.style.color = '#0f172a';
+            msgEl.textContent = 'Logging in...';
+        }
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.error || data.message || 'Login fail ho gaya.');
+        }
+
+        saveSession(data);
+        applyLoggedInUI(data.user);
+        resetIdleTimer();
+        startSessionWatcher();
+        if (msgEl) msgEl.textContent = '';
+    } catch (err) {
+        if (msgEl) {
+            msgEl.style.color = '#dc2626';
+            msgEl.textContent = err.message;
+        }
+    }
+}
+
+function startSessionWatcher() {
+    if (sessionPollId) clearInterval(sessionPollId);
+    sessionPollId = setInterval(async () => {
+        const sess = getSavedSession();
+        if (!sess || !sess.sessionId) return;
+
+        if (Date.now() - Number(sess.lastActivityAt || 0) >= IDLE_TIMEOUT_MS) {
+            forceLogout('5 minute tak koi activity na hone ke karan aap auto-logout ho gaye hain.');
+            return;
+        }
+
+        try {
+            await apiFetch('/api/auth/check-session');
+        } catch (_) {}
+    }, 15000);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    buildLiftingRows();
+    setDefaultDates();
+    initActivityListeners();
+    initFeedTransferModule();
+
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm && !loginForm.dataset.authBound) {
+        loginForm.dataset.authBound = 'true';
+        loginForm.addEventListener('submit', handleLoginSubmit);
+    }
+
+    const sess = getSavedSession();
+    if (!sess || !sess.sessionId || !sess.user) {
+        forceLogout('');
+        const loginMsg = document.getElementById('loginMsg');
+        if (loginMsg) loginMsg.textContent = '';
+        return;
+    }
+
+    if (Date.now() - Number(sess.lastActivityAt || 0) >= IDLE_TIMEOUT_MS) {
+        forceLogout('5 minute inactivity ke karan session expire ho gaya. Dobara login karein.');
+        return;
+    }
+
+    applyLoggedInUI(sess.user);
+    resetIdleTimer();
+    startSessionWatcher();
 });
 
 function setDefaultDates() {
     const today = new Date().toISOString().split('T')[0];
-    ['cDate', 'feedDate', 'dailyDate', 'saleDate'].forEach(id => {
+    ['cDate', 'feedDate', 'dailyDate', 'saleDate', 'ftDate'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = today;
     });
@@ -52,20 +261,22 @@ function generateFarmerId() {
 async function loadDropdownData() {
     try {
         let users = [];
-        const branchRes = await fetch('/api/master/branch');
-        allBranches = await branchRes.json();
-        const branchSelects = [document.getElementById('uBranch'), document.getElementById('fBranch')];
-        branchSelects.forEach(select => {
-            if (select) {
-                select.innerHTML = '<option value="">-- Branch Chunein --</option>';
-                allBranches.forEach(b => {
-                    select.innerHTML += `<option value="${b._id}">${b.branchName} (${b.branchId})</option>`;
-                });
-            }
-        });
-        renderBranchTable(allBranches);
+        const branchRes = await apiFetch('/api/master/branch');
+        if (branchRes.ok) {
+            allBranches = await branchRes.json();
+            const branchSelects = [document.getElementById('uBranch'), document.getElementById('fBranch')];
+            branchSelects.forEach(select => {
+                if (select) {
+                    select.innerHTML = '<option value="">-- Branch Chunein --</option>';
+                    allBranches.forEach(b => {
+                        select.innerHTML += `<option value="${b._id}">${b.branchName} (${b.branchId})</option>`;
+                    });
+                }
+            });
+            renderBranchTable(allBranches);
+        }
 
-        const userRes = await fetch('/api/master/user');
+        const userRes = await apiFetch('/api/master/user');
         if (userRes.ok) {
             users = await userRes.json();
             allSupervisors = users.filter(u => u.role && u.role.toLowerCase() === 'supervisor');
@@ -81,7 +292,7 @@ async function loadDropdownData() {
             renderUserTable(users);
         }
 
-        const farmerRes = await fetch('/api/master/farmer');
+        const farmerRes = await apiFetch('/api/master/farmer');
         if (farmerRes.ok) {
             allFarmers = await farmerRes.json();
             const farmerSelects = [
@@ -108,9 +319,10 @@ async function loadDropdownData() {
                 }
             });
             renderFarmerTable(allFarmers);
+            populateFeedTransferFarmers();
         }
 
-        const traderRes = await fetch('/api/master/trader');
+        const traderRes = await apiFetch('/api/master/trader');
         if (traderRes.ok) {
             allTraders = await traderRes.json();
             renderTraderTable(allTraders);
@@ -118,7 +330,7 @@ async function loadDropdownData() {
 
         populateSaleDropdowns(users, allTraders);
 
-        const itemRes = await fetch('/api/master/item');
+        const itemRes = await apiFetch('/api/master/item');
         if (itemRes.ok) {
             const items = await itemRes.json();
             renderItemTable(items);
@@ -139,7 +351,7 @@ async function loadDropdownData() {
 
 async function loadReportDropdowns() {
     try {
-        const branchRes = await fetch('/api/master/branch');
+        const branchRes = await apiFetch('/api/master/branch');
         if (branchRes.ok) {
             const branches = await branchRes.json();
             const bSelect = document.getElementById('reportBranchSelect');
@@ -151,7 +363,7 @@ async function loadReportDropdowns() {
             }
         }
 
-        const userRes = await fetch('/api/master/user');
+        const userRes = await apiFetch('/api/master/user');
         if (userRes.ok) {
             const users = await userRes.json();
             const supervisors = users.filter(u => u.role && u.role.toLowerCase() === 'supervisor');
@@ -171,9 +383,9 @@ async function loadReportDropdowns() {
 async function loadEntriesData() {
     try {
         const [placementRes, feedRes, dailyRes] = await Promise.all([
-            fetch('/api/entry/chicks-placement'),
-            fetch('/api/entry/feed-dispatch'),
-            fetch('/api/entry/daily-entry')
+            apiFetch('/api/entry/chicks-placement'),
+            apiFetch('/api/entry/feed-dispatch'),
+            apiFetch('/api/entry/daily-entry')
         ]);
 
         if (placementRes.ok) renderChicksTable(await placementRes.json());
@@ -317,12 +529,12 @@ function renderFeedTable(feeds) {
 async function approveFeedDispatch(id) {
     if (!confirm("Kya aap is feed dispatch ko approve karna chahte hain?")) return;
     try {
-        const res = await fetch(`/api/entry/feed-dispatch/approve/${id}`, { method: 'PUT' });
+        const res = await apiFetch(`/api/entry/feed-dispatch/approve/${id}`, { method: 'PUT' });
         const data = await res.json();
         if (res.ok) {
             alert(data.message);
             loadEntriesData();
-            refreshActiveReportTab();
+            if (typeof refreshActiveReportTab === 'function') refreshActiveReportTab();
         } else {
             alert(data.error || "Approval fail ho gaya!");
         }
@@ -393,6 +605,165 @@ function renderDailyTable(entries, feedsList = allFeedDispatches) {
             </td>
         </tr>`;
     }).join('');
+}
+
+// =========================================================
+// FEED TRANSFER (FARMER TO FARMER)
+// =========================================================
+async function populateFeedTransferFarmers() {
+    const fromSel = document.getElementById('ftFromFarmer');
+    const toSel = document.getElementById('ftToFarmer');
+    if (!fromSel && !toSel) return;
+
+    let farmers = allFarmers;
+    if (!Array.isArray(farmers) || farmers.length === 0) {
+        const res = await apiFetch('/api/master/farmer');
+        if (res.ok) {
+            const raw = await res.json();
+            farmers = Array.isArray(raw) ? raw : (raw.farmers || raw.data || []);
+        }
+    }
+
+    const optionsHtml = '<option value="">-- Select Farmer --</option>' +
+        (farmers || []).map(f => {
+            const name = f.farmerName || f.name || 'Farmer';
+            const code = f.farmerId ? ` (${f.farmerId})` : '';
+            return `<option value="${f._id}">${name}${code}</option>`;
+        }).join('');
+
+    if (fromSel) {
+        const prevFrom = fromSel.value;
+        fromSel.innerHTML = optionsHtml;
+        if (prevFrom) fromSel.value = prevFrom;
+    }
+    if (toSel) {
+        const prevTo = toSel.value;
+        toSel.innerHTML = optionsHtml;
+        if (prevTo) toSel.value = prevTo;
+    }
+}
+
+async function loadFeedTransfers() {
+    const tbody = document.getElementById('feedTransferTableBody');
+    if (!tbody) return;
+
+    try {
+        const res = await apiFetch('/api/feed-transfer');
+        const raw = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(raw.error || raw.message || 'Feed transfer load nahi ho paya.');
+        }
+
+        const list = Array.isArray(raw) ? raw : (raw.transfers || raw.data || []);
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Koi feed transfer record nahi hai.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(t => {
+            const fromName = t.fromFarmerName || t.fromFarmer?.farmerName || '-';
+            const toName = t.toFarmerName || t.toFarmer?.farmerName || '-';
+            const dateStr = t.date ? new Date(t.date).toLocaleDateString('en-IN') : '-';
+
+            return `
+                <tr>
+                    <td>${dateStr}</td>
+                    <td>${t.transferNo || '-'}</td>
+                    <td>${fromName}</td>
+                    <td>${toName}</td>
+                    <td>${t.feedType || 'Broiler Feed'}</td>
+                    <td>${Number(t.qtyKg || 0).toFixed(2)}</td>
+                    <td>${t.remarks || '-'}</td>
+                    <td>
+                        <button type="button" class="action-btn btn-delete" onclick="deleteFeedTransfer('${t._id}')">Delete</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#dc2626;">${err.message}</td></tr>`;
+    }
+}
+
+async function deleteFeedTransfer(id) {
+    if (!confirm('Kya aap is feed transfer entry ko delete karna chahte hain?')) return;
+    try {
+        const res = await apiFetch(`/api/feed-transfer/${id}`, { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.message || 'Delete karne mein error aaya.');
+        await loadFeedTransfers();
+    } catch (err) {
+        alert(err.message || 'Delete karne mein error aaya.');
+    }
+}
+
+function initFeedTransferModule() {
+    const form = document.getElementById('feedTransferForm');
+    const dateInput = document.getElementById('ftDate');
+    if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    const sess = getSavedSession();
+    if (sess && sess.sessionId) {
+        populateFeedTransferFarmers().catch(() => {});
+        loadFeedTransfers();
+    }
+
+    if (form && !form.dataset.ftBound) {
+        form.dataset.ftBound = 'true';
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msgEl = document.getElementById('ftMsg');
+
+            const fromFarmerId = document.getElementById('ftFromFarmer')?.value;
+            const toFarmerId = document.getElementById('ftToFarmer')?.value;
+            const qtyKg = Number(document.getElementById('ftQtyKg')?.value || 0);
+
+            if (!fromFarmerId || !toFarmerId) {
+                if (msgEl) { msgEl.style.color = '#dc2626'; msgEl.textContent = 'From Farmer aur To Farmer dono select karein.'; }
+                return;
+            }
+            if (fromFarmerId === toFarmerId) {
+                if (msgEl) { msgEl.style.color = '#dc2626'; msgEl.textContent = 'From Farmer aur To Farmer alag-alag hone chahiye.'; }
+                return;
+            }
+            if (!qtyKg || qtyKg <= 0) {
+                if (msgEl) { msgEl.style.color = '#dc2626'; msgEl.textContent = 'Sahi Quantity (KG) daalein.'; }
+                return;
+            }
+
+            const payload = {
+                date: document.getElementById('ftDate')?.value,
+                fromFarmerId,
+                toFarmerId,
+                feedType: document.getElementById('ftFeedType')?.value || 'Broiler Feed',
+                qtyKg,
+                remarks: document.getElementById('ftRemarks')?.value || ''
+            };
+
+            try {
+                if (msgEl) { msgEl.style.color = '#0f172a'; msgEl.textContent = 'Saving transfer...'; }
+                const res = await apiFetch('/api/feed-transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || 'Transfer save nahi ho paya.');
+
+                if (msgEl) {
+                    msgEl.style.color = '#059669';
+                    msgEl.textContent = data.message || 'Feed transfer save ho gaya.';
+                }
+                form.reset();
+                if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+                await loadFeedTransfers();
+            } catch (err) {
+                if (msgEl) { msgEl.style.color = '#dc2626'; msgEl.textContent = err.message; }
+            }
+        });
+    }
 }
 
 // =========================================================
@@ -501,7 +872,7 @@ function populateSaleDropdowns(users, traders) {
 
 async function loadSaleEntries() {
     try {
-        const res = await fetch('/api/sale');
+        const res = await apiFetch('/api/sale');
         if (res.ok) {
             allSaleEntries = await res.json();
             renderSaleTable(allSaleEntries);
@@ -542,7 +913,9 @@ function resetSaleForm() {
     const form = document.getElementById('saleEntryForm');
     if (form) form.reset();
     document.getElementById('editSaleMongoId').value = '';
-    document.getElementById('saleSaveBtn').innerText = 'Save Sale Entry';
+    if (document.getElementById('saleSaveBtn')) {
+        document.getElementById('saleSaveBtn').innerText = 'Save Sale Entry';
+    }
     const today = new Date().toISOString().split('T')[0];
     if (document.getElementById('saleDate')) document.getElementById('saleDate').value = today;
     buildLiftingRows();
@@ -580,13 +953,15 @@ function editSaleEntry(id) {
     });
 
     recalcSaleSummary();
-    document.getElementById('saleSaveBtn').innerText = 'Update Sale Entry';
+    if (document.getElementById('saleSaveBtn')) {
+        document.getElementById('saleSaveBtn').innerText = 'Update Sale Entry';
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function deleteSaleEntry(id) {
     if (!confirm('Kya aap is sale entry ko delete karna chahte hain?')) return;
-    const res = await fetch(`/api/sale/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/sale/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (res.ok) {
         alert(data.message);
@@ -596,9 +971,28 @@ async function deleteSaleEntry(id) {
     }
 }
 
+async function deleteRecord(url) {
+    if (!confirm('Kya aap is record ko delete karna chahte hain?')) return;
+    try {
+        const res = await apiFetch(url, { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.error || data.message || 'Delete fail hua!');
+            return;
+        }
+        alert(data.message || 'Record delete ho gaya.');
+        loadDropdownData();
+        loadEntriesData();
+        loadSaleEntries();
+    } catch (e) {
+        alert('Server Error!');
+    }
+}
+
 function openSalePrintSheet(id) {
     const s = allSaleEntries.find(item => item._id === id);
-    if (!s) return;
+    const printArea = document.getElementById('liftingPrintableArea');
+    if (!s || !printArea) return;
 
     const rowsMap = {};
     (s.rows || []).forEach(r => { rowsMap[r.slNo] = r; });
@@ -641,7 +1035,7 @@ function openSalePrintSheet(id) {
 
     const formattedDate = s.date ? new Date(s.date).toLocaleDateString('en-GB') : '';
 
-    document.getElementById('liftingPrintableArea').innerHTML = `
+    printArea.innerHTML = `
         <div id="sheetPaper" style="background:#ffb6c8; color:#111827; border:2px solid #be185d; padding:12px; font-family:'Segoe UI', Arial, sans-serif; font-size:12px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1.5px solid #9d174d; padding-bottom:6px; margin-bottom:8px;">
                 <div style="font-weight:800; font-size:15px; color:#831843;">
@@ -653,7 +1047,7 @@ function openSalePrintSheet(id) {
                     <div style="font-size:15px; font-weight:800; margin-top:2px; text-decoration:underline;">BIRD LIFTING SHEET CUM INVOICE</div>
                 </div>
                 <div style="text-align:right; font-weight:800; font-size:13px; color:#831843;">
-                    Sl. No. <span style="font-size:16px; border-bottom:1.5px solid #831843; padding:0 6px;">${s.slNo}</span>
+                    Sl. No. <span style="font-size:16px; border-bottom:1.5px solid #831843; padding:0 6px;">${s.slNo || ''}</span>
                 </div>
             </div>
 
@@ -700,661 +1094,25 @@ function openSalePrintSheet(id) {
 
             <div style="display:grid; grid-template-columns:1.1fr 1fr; gap:10px; align-items:end; border-top:1.5px solid #9d174d; padding-top:8px;">
                 <div style="font-weight:800; font-size:13px; line-height:1.7;">
-                    <div>Total Weight: <span style="border-bottom:1.5px solid #111827; padding:0 8px;">${Number(s.totalWeightKg || 0).toFixed(2)} Kg</span></div>
-                    <div>Total Pcs.: <span style="border-bottom:1.5px solid #111827; padding:0 8px;">${s.totalPcs || 0}</span></div>
-                    <div>Avg. Body Weight: <span style="border-bottom:1.5px solid #111827; padding:0 8px;">${Number(s.avgBodyWeightKg || 0).toFixed(3)} Kg</span></div>
+                    <div>Total Birds: ${s.totalPcs || 0} Pcs</div>
+                    <div>Total Weight: ${Number(s.totalWeightKg || 0).toFixed(2)} Kg</div>
+                    <div>Avg. Body Weight: ${Number(s.avgBodyWeightKg || 0).toFixed(3)} Kg</div>
                 </div>
-                <div style="border:1px solid #9d174d; padding:6px 8px; background:rgba(255,255,255,0.5); font-size:11.5px; line-height:1.6;">
+                <div style="font-size:11.5px; line-height:1.7; text-align:right;">
                     <div><b>Feed Closing Stock:</b> ${s.feedClosingStock || ''}</div>
                     <div><b>Bird Stock:</b> ${s.birdStock || ''}</div>
                     <div><b>Weak Birds:</b> ${s.weakBirds || ''}</div>
                 </div>
             </div>
-
-            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:24px; text-align:center; font-weight:700; font-size:11px;">
-                <div style="border-top:1px solid #111827; padding-top:4px;">Farmer Signature</div>
-                <div style="border-top:1px solid #111827; padding-top:4px;">Customer Signature</div>
-                <div style="border-top:1px solid #111827; padding-top:4px;">Lifter Signature</div>
-                <div style="border-top:1px solid #111827; padding-top:4px;">Marketing Signature</div>
-            </div>
         </div>
     `;
 
-    document.getElementById('liftingPrintModal').style.display = 'flex';
-}
-
-function closePrintModal() {
-    document.getElementById('liftingPrintModal').style.display = 'none';
-}
-
-function printLiftingSheet() {
-    const printContent = document.getElementById('liftingPrintableArea').innerHTML;
-    const win = window.open('', '_blank', 'width=950,height=700');
-    win.document.write(`
-        <html>
-        <head>
-            <title>Bird Lifting Sheet Cum Invoice</title>
-            <style>
-                body { margin: 12px; font-family: 'Segoe UI', Arial, sans-serif; }
-                table td, table th { border: 1px solid #9d174d !important; padding: 3px 5px !important; }
-                @media print { body { margin: 0; } }
-            </style>
-        </head>
-        <body>${printContent}</body>
-        </html>
-    `);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 300);
-}
-
-document.getElementById('saleEntryForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const editId = document.getElementById('editSaleMongoId').value;
-    const msgEl = document.getElementById('saleMsg');
-
-    const payload = {
-        slNo: document.getElementById('saleSlNo').value,
-        date: document.getElementById('saleDate').value,
-        liftingSupervisorId: document.getElementById('saleSupervisor').value,
-        traderId: document.getElementById('saleTrader').value,
-        farmerId: document.getElementById('saleFarmer').value,
-        wtStartingTime: document.getElementById('wtStartTime').value,
-        wtClosingTime: document.getElementById('wtCloseTime').value,
-        driverName: document.getElementById('saleDriver').value,
-        vehicleNo: document.getElementById('saleVehicle').value,
-        rate: document.getElementById('saleRate').value,
-        age: document.getElementById('saleAge').value,
-        lsName: document.getElementById('saleLsName').value,
-        rows: collectLiftingRows(),
-        feedClosingStock: document.getElementById('saleFeedClosing').value,
-        birdStock: document.getElementById('saleBirdStock').value,
-        weakBirds: document.getElementById('saleWeakBirds').value
-    };
-
-    try {
-        const url = editId ? `/api/sale/${editId}` : '/api/sale';
-        const method = editId ? 'PUT' : 'POST';
-        const res = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const result = await res.json();
-        if (res.ok) {
-            msgEl.style.color = '#10b981';
-            msgEl.innerText = result.message || 'Saved successfully!';
-            resetSaleForm();
-            loadSaleEntries();
-        } else {
-            msgEl.style.color = '#ef4444';
-            msgEl.innerText = result.error || 'Save error!';
-        }
-    } catch (err) {
-        msgEl.style.color = '#ef4444';
-        msgEl.innerText = 'Network Error!';
+    const modal = document.getElementById('ledgerModal');
+    const titleEl = document.getElementById('ledgerModalTitle');
+    const bodyEl = document.getElementById('ledgerModalBody');
+    if (titleEl) titleEl.textContent = `Bird Lifting Sheet — Sl. No. ${s.slNo || ''}`;
+    if (bodyEl) {
+        bodyEl.innerHTML = printArea.innerHTML;
     }
-});
-
-// --- REPORT LOADERS WITH CLOSING FEED, TOTALS & CLICKABLE LEDGER ---
-function loadReportData(type) {
-    if (type === 'branch') {
-        const branchId = document.getElementById('reportBranchSelect').value;
-        fetch(`/api/reports/branch-wise?branchId=${branchId}`)
-            .then(res => res.json())
-            .then(data => renderReportTable(data, 'branchReportTableBody', 'branchReportTableFoot', false));
-    } else if (type === 'supervisor') {
-        const supervisorId = document.getElementById('reportSupSelect').value;
-        fetch(`/api/reports/supervisor-wise?supervisorId=${supervisorId}`)
-            .then(res => res.json())
-            .then(data => renderReportTable(data, 'supervisorReportTableBody', 'supervisorReportTableFoot', false));
-    } else if (type === 'farmer') {
-        fetch('/api/reports/farmer-wise')
-            .then(res => res.json())
-            .then(data => renderReportTable(data, 'farmerReportTableBody', 'farmerReportTableFoot', true));
-    }
+    if (modal) modal.style.display = 'flex';
 }
-
-function renderReportTable(data, tbodyId, tfootId, isFarmerWise) {
-    const tbody = document.getElementById(tbodyId);
-    const tfoot = document.getElementById(tfootId);
-
-    if (!Array.isArray(data) || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; color:#64748b;">Koi data nahi mila</td></tr>`;
-        tfoot.innerHTML = '';
-        return;
-    }
-
-    let totPlacement = 0, totMortality = 0, totLive = 0, totWeight = 0, totFeedIn = 0, totFeed = 0, totClosingFeed = 0;
-
-    tbody.innerHTML = data.map(r => {
-        const placement = Number(r.totalPlacementChicks || 0);
-        const mortality = Number(r.totalMortality || 0);
-        const live = Number(r.currentLiveChicks || 0);
-        const avgBw = Number(r.avgBodyWeightGram || 0);
-        const feedConsume = Number(r.totalFeedConsumeKg || 0);
-        const dayFeedConsume = Number(r.dayFeedConsumeKg || 0);
-        const feedIn = r.totalFeedInKg !== undefined
-            ? Number(r.totalFeedInKg)
-            : getFarmerTotalFeedIn(r.farmerMongoId);
-        const closingFeed = r.closingFeedKg !== undefined
-            ? Number(r.closingFeedKg)
-            : Number((feedIn - feedConsume).toFixed(2));
-
-        const weight = Number(r.totalBodyWeightKg || 0) > 0
-            ? Number(r.totalBodyWeightKg)
-            : Number(((live * avgBw) / 1000).toFixed(2));
-
-        const fcrVal = Number(r.fcr || 0) > 0
-            ? Number(r.fcr)
-            : (weight > 0 ? Number((feedConsume / weight).toFixed(2)) : 0);
-
-        totPlacement += placement;
-        totMortality += mortality;
-        totLive += live;
-        totWeight += weight;
-        totFeedIn += feedIn;
-        totFeed += feedConsume;
-        totClosingFeed += closingFeed;
-
-        const closingColor = closingFeed < 0 ? '#ef4444' : '#059669';
-
-        let farmerCol = isFarmerWise
-            ? `<a href="#" onclick="openFarmerLedger('${r.farmerMongoId}', '${r.farmerName}', '${r.farmerId}')" style="color:#2563eb; font-weight:bold; text-decoration:underline;">${r.farmerName} (${r.farmerId})</a>`
-            : `<b>${r.farmerName}</b> (${r.farmerId})`;
-
-        return `
-            <tr>
-                <td>${farmerCol}</td>
-                <td>${r.branchName}</td>
-                <td>${r.supervisorName}</td>
-                <td>${r.age} Days</td>
-                <td style="color:#2563eb; font-weight:600;">${placement}</td>
-                <td style="color:#ef4444; font-weight:600;">${mortality} (${r.mortalityPercentage || 0}%)</td>
-                <td style="color:#10b981; font-weight:600;">${live}</td>
-                <td>${avgBw} g</td>
-                <td style="color:#2563eb; font-weight:600;">${weight.toFixed(2)} KG</td>
-                <td>${feedIn.toFixed(2)} KG</td>
-                <td title="Day Feed: ${dayFeedConsume.toFixed(2)} KG">${feedConsume.toFixed(2)} KG</td>
-                <td style="font-weight:700; color:${closingColor};">${closingFeed.toFixed(2)} KG</td>
-                <td style="font-weight:bold;">${fcrVal}</td>
-            </tr>
-        `;
-    }).join('');
-
-    const grandClosingColor = totClosingFeed < 0 ? '#ef4444' : '#059669';
-
-    tfoot.innerHTML = `
-        <tr>
-            <td colspan="4" style="text-align:right;">GRAND TOTAL:</td>
-            <td style="color:#2563eb;">${totPlacement}</td>
-            <td style="color:#ef4444;">${totMortality}</td>
-            <td style="color:#10b981;">${totLive}</td>
-            <td>-</td>
-            <td style="color:#2563eb;">${totWeight.toFixed(2)} KG</td>
-            <td>${totFeedIn.toFixed(2)} KG</td>
-            <td>${totFeed.toFixed(2)} KG</td>
-            <td style="color:${grandClosingColor};">${totClosingFeed.toFixed(2)} KG</td>
-            <td>-</td>
-        </tr>
-    `;
-}
-
-// --- FARMER LEDGER MODAL LOGIC ---
-async function openFarmerLedger(farmerMongoId, farmerName, farmerId) {
-    try {
-        const res = await fetch(`/api/reports/farmer-ledger/${farmerMongoId}`);
-        const data = await res.json();
-
-        document.getElementById('modalFarmerTitle').innerText = `Ledger History: ${farmerName} (${farmerId})`;
-        const feedIn = data.totalFeedInKg !== undefined
-            ? Number(data.totalFeedInKg)
-            : getFarmerTotalFeedIn(farmerMongoId);
-
-        document.getElementById('modalFarmerInfo').innerHTML = `
-            <b>Branch:</b> ${data.farmer.branch ? data.farmer.branch.branchName : 'N/A'} | 
-            <b>Supervisor:</b> ${data.farmer.supervisor ? data.farmer.supervisor.fullName : 'N/A'} | 
-            <b>Mobile:</b> ${data.farmer.mobileNo || 'N/A'} | 
-            <b>Total Feed In:</b> ${feedIn.toFixed(2)} KG
-        `;
-
-        const tbody = document.getElementById('modalLedgerBody');
-        if (!data.entries || data.entries.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;">Koi daily log entry nahi mili</td></tr>`;
-        } else {
-            tbody.innerHTML = data.entries.map(e => {
-                const dayFeed = Number(e.dayFeedConsumeKg || 0);
-                const consumed = Number(e.totalFeedConsumeKg || 0);
-                const rowFeedIn = e.totalFeedInKg !== undefined ? Number(e.totalFeedInKg) : feedIn;
-                const closing = e.closingFeedKg !== undefined
-                    ? Number(e.closingFeedKg)
-                    : Number((rowFeedIn - consumed).toFixed(2));
-                const closingColor = closing < 0 ? '#ef4444' : '#059669';
-
-                return `
-                <tr>
-                    <td>${new Date(e.date).toLocaleDateString('en-GB')}</td>
-                    <td>${e.days} Days</td>
-                    <td>${e.dayMortality}</td>
-                    <td style="color:#ef4444;">${e.totalMortality} (${e.mortalityPercentage}%)</td>
-                    <td style="color:#10b981; font-weight:600;">${e.currentLiveChicks}</td>
-                    <td>${e.avgBodyWeightGram || 0} g</td>
-                    <td style="font-weight:600; color:#2563eb;">${Number(e.totalBodyWeightKg || 0).toFixed(2)} KG</td>
-                    <td title="Day Feed: ${dayFeed.toFixed(2)} KG">${consumed.toFixed(2)} KG</td>
-                    <td style="font-weight:700; color:${closingColor};">${closing.toFixed(2)} KG</td>
-                    <td style="font-weight:bold;">${e.fcr || 0}</td>
-                </tr>
-            `;
-            }).join('');
-        }
-
-        document.getElementById('ledgerModal').style.display = 'flex';
-    } catch (e) {
-        alert("Farmer ledger load karne me error aayi!");
-    }
-}
-
-function closeLedgerModal() {
-    document.getElementById('ledgerModal').style.display = 'none';
-}
-
-// --- EXPORT TO EXCEL ---
-function exportTableToExcel(tableId, filename = 'report') {
-    const table = document.getElementById(tableId);
-    const wb = XLSX.utils.table_to_book(table, { sheet: "Sheet1" });
-    XLSX.writeFile(wb, `${filename}.xlsx`);
-}
-
-// --- EXPORT TO PDF ---
-function exportTableToPDF(title, tableId) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('l', 'mm', 'a4');
-
-    doc.setFontSize(16);
-    doc.text(title, 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleDateString('en-GB')}`, 14, 22);
-
-    doc.autoTable({
-        html: `#${tableId}`,
-        startY: 28,
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 3 },
-        headStyles: { fillColor: [16, 185, 129] }
-    });
-
-    doc.save(`${title.toLowerCase().replace(/\s+/g, '_')}.pdf`);
-}
-
-// --- EDIT & DELETE HELPERS ---
-function editBranch(id, branchId, branchName, address) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editBranchId').value = id;
-    document.getElementById('branchId').value = branchId;
-    document.getElementById('branchName').value = branchName;
-    document.getElementById('branchAddress').value = address;
-    document.getElementById('branchSaveBtn').innerText = "Update Branch";
-}
-
-function editUser(id, userId, fullName, role, branchId, mobile) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editUserId').value = id;
-    document.getElementById('uId').value = userId;
-    document.getElementById('uName').value = fullName;
-    document.getElementById('uRole').value = role;
-    document.getElementById('uBranch').value = branchId;
-    document.getElementById('uMobile').value = mobile;
-    document.getElementById('userSaveBtn').innerText = "Update User";
-}
-
-function editFarmer(id, farmerId, farmerName, supervisorId, branchId, mobile, address) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editFarmerId').value = id;
-    document.getElementById('fId').value = farmerId;
-    document.getElementById('fName').value = farmerName;
-    document.getElementById('fSup').value = supervisorId;
-    document.getElementById('fBranch').value = branchId;
-    document.getElementById('fMobile').value = mobile;
-    document.getElementById('fAddress').value = address;
-    document.getElementById('farmerSaveBtn').innerText = "Update Farmer";
-}
-
-function editTrader(id, traderId, traderName, mobile, address) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editTraderMongoId').value = id;
-    document.getElementById('tId').value = traderId;
-    document.getElementById('tName').value = traderName;
-    document.getElementById('tMobile').value = mobile;
-    document.getElementById('tAddress').value = address;
-    document.getElementById('traderSaveBtn').innerText = "Update Trader";
-}
-
-function editItem(id, itemId, itemName, category, unit) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editItemMongoId').value = id;
-    document.getElementById('iId').value = itemId;
-    document.getElementById('iName').value = itemName;
-    document.getElementById('iCat').value = category;
-    document.getElementById('iUnit').value = unit;
-    document.getElementById('itemSaveBtn').innerText = "Update Item";
-}
-
-function editPlacement(id, placementId, date, farmerId, qty) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editPlacementMongoId').value = id;
-    document.getElementById('cPlacementId').value = placementId;
-    document.getElementById('cDate').value = date;
-    document.getElementById('cFarmer').value = farmerId;
-    autofillChicksDetails();
-    document.getElementById('cQty').value = qty;
-    document.getElementById('chicksSaveBtn').innerText = "Update Placement";
-}
-
-function editFeed(id, challanNo, date, farmerId, feedType, qty) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editFeedMongoId').value = id;
-    document.getElementById('challanNo').value = challanNo;
-    document.getElementById('feedDate').value = date;
-    document.getElementById('feedFarmer').value = farmerId;
-    autofillFeedDetails();
-    document.getElementById('feedType').value = feedType;
-    document.getElementById('qtyKg').value = qty;
-    calculateBags();
-    document.getElementById('feedSaveBtn').innerText = "Update Feed";
-}
-
-function editDaily(id, date, farmerId, mort, feed, bw) {
-    if (!checkMasterPermission()) return;
-    document.getElementById('editDailyMongoId').value = id;
-    document.getElementById('dailyDate').value = date;
-    document.getElementById('dailyFarmer').value = farmerId;
-    autofillDailyDetails();
-    document.getElementById('dMort').value = mort;
-    document.getElementById('dFeed').value = feed;
-    document.getElementById('dBw').value = bw !== 'undefined' ? bw : '';
-    document.getElementById('dailySaveBtn').innerText = "Update Daily Log";
-}
-
-function checkMasterPermission() {
-    if (!currentUser) { alert("Pehle Login Karein!"); return false; }
-    const role = currentUser.role ? currentUser.role.toLowerCase() : '';
-    if (role !== 'admin' && role !== 'accountant') {
-        alert("Access Denied: Sirf Admin aur Accountant hi Edit/Delete kar sakte hain!");
-        return false;
-    }
-    return true;
-}
-
-async function deleteRecord(url) {
-    if (!checkMasterPermission()) return;
-    if (!confirm("Kya aap ise delete karna chahte hain?")) return;
-    try {
-        const res = await fetch(url, { method: 'DELETE' });
-        const data = await res.json();
-        if (res.ok) {
-            alert(data.message);
-            loadDropdownData();
-            loadEntriesData();
-            refreshActiveReportTab();
-        } else {
-            alert(data.error || "Delete fail ho gaya!");
-        }
-    } catch (e) { alert("Server error!"); }
-}
-
-function autofillBranchFromSupervisor() {
-    const supSelect = document.getElementById('fSup');
-    const selectedOption = supSelect.options[supSelect.selectedIndex];
-    const branchId = selectedOption.getAttribute('data-branch');
-    const branchDropdown = document.getElementById('fBranch');
-    if (branchId) { branchDropdown.value = branchId; generateFarmerId(); }
-    else { branchDropdown.value = ""; }
-}
-
-function autofillChicksDetails() {
-    const farmerSelect = document.getElementById('cFarmer');
-    const selectedOption = farmerSelect.options[farmerSelect.selectedIndex];
-    if (farmerSelect && farmerSelect.value) {
-        document.getElementById('cSupName').value = selectedOption.getAttribute('data-supname');
-        document.getElementById('cBranchName').value = selectedOption.getAttribute('data-branchname');
-        if (!document.getElementById('editPlacementMongoId').value) {
-            const farmerCode = selectedOption.getAttribute('data-farmerid');
-            const branchCode = selectedOption.getAttribute('data-branchcode').split('-')[0];
-            const rand = Math.floor(10 + Math.random() * 90);
-            document.getElementById('cPlacementId').value = `PLC-${branchCode}-${farmerCode}-${rand}`;
-        }
-    } else {
-        document.getElementById('cSupName').value = '';
-        document.getElementById('cBranchName').value = '';
-        if (!document.getElementById('editPlacementMongoId').value) document.getElementById('cPlacementId').value = '';
-    }
-}
-
-function autofillFeedDetails() {
-    const farmerSelect = document.getElementById('feedFarmer');
-    const selectedOption = farmerSelect.options[farmerSelect.selectedIndex];
-    if (farmerSelect && farmerSelect.value) {
-        document.getElementById('feedSupName').value = selectedOption.getAttribute('data-supname');
-        document.getElementById('feedBranchName').value = selectedOption.getAttribute('data-branchname');
-    } else {
-        document.getElementById('feedSupName').value = '';
-        document.getElementById('feedBranchName').value = '';
-    }
-}
-
-function autofillDailyDetails() {
-    const farmerSelect = document.getElementById('dailyFarmer');
-    const selectedOption = farmerSelect.options[farmerSelect.selectedIndex];
-    if (farmerSelect && farmerSelect.value) {
-        document.getElementById('dailySupName').value = selectedOption.getAttribute('data-supname');
-        document.getElementById('dailyBranchName').value = selectedOption.getAttribute('data-branchname');
-    } else {
-        document.getElementById('dailySupName').value = '';
-        document.getElementById('dailyBranchName').value = '';
-    }
-}
-
-function toggleSubMenu(element) {
-    element.parentElement.classList.toggle('open');
-}
-
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const backdrop = document.getElementById('backdrop');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.toggle('mobile-open');
-        backdrop.classList.toggle('active');
-    } else {
-        sidebar.classList.toggle('collapsed');
-    }
-}
-
-function switchTab(tabId, element) {
-    document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
-    document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
-    document.getElementById(tabId).classList.add('active');
-    element.classList.add('active');
-
-    if (tabId === 'saleEntryTab') loadSaleEntries();
-    if (tabId === 'branchReportTab') loadReportData('branch');
-    if (tabId === 'supervisorReportTab') loadReportData('supervisor');
-    if (tabId === 'farmerReportTab') loadReportData('farmer');
-
-    const sidebar = document.getElementById('sidebar');
-    const backdrop = document.getElementById('backdrop');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.remove('mobile-open');
-        backdrop.classList.remove('active');
-    } else {
-        sidebar.classList.add('collapsed');
-    }
-}
-
-function refreshActiveReportTab() {
-    if (document.getElementById('branchReportTab').classList.contains('active')) {
-        loadReportData('branch');
-    } else if (document.getElementById('supervisorReportTab').classList.contains('active')) {
-        loadReportData('supervisor');
-    } else if (document.getElementById('farmerReportTab').classList.contains('active')) {
-        loadReportData('farmer');
-    }
-}
-
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const userId = document.getElementById('loginUserId').value;
-    const password = document.getElementById('loginPassword').value;
-    try {
-        const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, password })
-        });
-        const data = await res.json();
-        if (res.ok) {
-            currentUser = data.user;
-            document.getElementById('loginOverlay').style.display = 'none';
-            document.getElementById('userDisplayName').innerText = currentUser.fullName;
-            document.getElementById('userRoleBadge').innerText = currentUser.role + " | " + currentUser.userId;
-            document.getElementById('avatarIcon').innerText = currentUser.fullName.charAt(0).toUpperCase();
-        } else {
-            document.getElementById('loginMsg').style.color = '#ef4444';
-            document.getElementById('loginMsg').innerText = data.error || "Login Failed!";
-        }
-    } catch (err) {
-        document.getElementById('loginMsg').innerText = "Server Error!";
-    }
-});
-
-function logout() { location.reload(); }
-
-async function sendPost(url, data, msgId, formId) {
-    const msgEl = document.getElementById(msgId);
-    try {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await res.json();
-        if (res.ok) {
-            msgEl.style.color = '#10b981';
-            msgEl.innerText = result.message || "Saved Successfully!";
-            if (formId) {
-                document.getElementById(formId).reset();
-                setDefaultDates();
-                const bagSpan = document.getElementById('bagCalcText');
-                if (bagSpan) bagSpan.innerText = '';
-            }
-            loadDropdownData();
-            loadEntriesData();
-            refreshActiveReportTab();
-        } else {
-            msgEl.style.color = '#ef4444';
-            msgEl.innerText = result.error || "Error occurred!";
-        }
-    } catch (e) {
-        msgEl.style.color = '#ef4444';
-        msgEl.innerText = "Network Error!";
-    }
-}
-
-async function sendPut(url, data, msgId, formId, saveBtnId, defaultBtnText, editInputId) {
-    const msgEl = document.getElementById(msgId);
-    try {
-        const res = await fetch(url, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        const result = await res.json();
-        if (res.ok) {
-            msgEl.style.color = '#10b981';
-            msgEl.innerText = result.message || "Updated Successfully!";
-            if (formId) document.getElementById(formId).reset();
-            if (editInputId) document.getElementById(editInputId).value = '';
-            if (saveBtnId) document.getElementById(saveBtnId).innerText = defaultBtnText;
-            const bagSpan = document.getElementById('bagCalcText');
-            if (bagSpan) bagSpan.innerText = '';
-            loadDropdownData();
-            loadEntriesData();
-            refreshActiveReportTab();
-        } else {
-            msgEl.style.color = '#ef4444';
-            msgEl.innerText = result.error || "Update error!";
-        }
-    } catch (e) {
-        msgEl.style.color = '#ef4444';
-        msgEl.innerText = "Network Error!";
-    }
-}
-
-// Master & Transaction Form Handlers
-document.getElementById('branchForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!checkMasterPermission()) return;
-    const editId = document.getElementById('editBranchId').value;
-    const bodyData = { branchId: document.getElementById('branchId').value, branchName: document.getElementById('branchName').value, address: document.getElementById('branchAddress').value };
-    if (editId) sendPut(`/api/master/branch/${editId}`, bodyData, 'branchMsg', 'branchForm', 'branchSaveBtn', 'Save Branch', 'editBranchId');
-    else sendPost('/api/master/branch', bodyData, 'branchMsg', 'branchForm');
-});
-
-document.getElementById('userForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!checkMasterPermission()) return;
-    const editId = document.getElementById('editUserId').value;
-    const bodyData = { userId: document.getElementById('uId').value, fullName: document.getElementById('uName').value, password: document.getElementById('uPass').value, role: document.getElementById('uRole').value, branch: document.getElementById('uBranch').value, mobileNumber: document.getElementById('uMobile').value };
-    if (editId) sendPut(`/api/master/user/${editId}`, bodyData, 'userMsg', 'userForm', 'userSaveBtn', 'Save User', 'editUserId');
-    else sendPost('/api/master/user', bodyData, 'userMsg', 'userForm');
-});
-
-document.getElementById('farmerForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!checkMasterPermission()) return;
-    const editId = document.getElementById('editFarmerId').value;
-    const bodyData = { farmerId: document.getElementById('fId').value, farmerName: document.getElementById('fName').value, supervisor: document.getElementById('fSup').value, branch: document.getElementById('fBranch').value, mobileNo: document.getElementById('fMobile').value, address: document.getElementById('fAddress').value, bankDetails: { bankName: document.getElementById('fBank').value, accountNo: document.getElementById('fAcc').value, ifsc: document.getElementById('fIfsc').value } };
-    if (editId) sendPut(`/api/master/farmer/${editId}`, bodyData, 'farmerMsg', 'farmerForm', 'farmerSaveBtn', 'Save Farmer', 'editFarmerId');
-    else sendPost('/api/master/farmer', bodyData, 'farmerMsg', 'farmerForm');
-});
-
-document.getElementById('traderForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!checkMasterPermission()) return;
-    const editId = document.getElementById('editTraderMongoId').value;
-    const bodyData = { traderId: document.getElementById('tId').value, traderName: document.getElementById('tName').value, mobileNo: document.getElementById('tMobile').value, address: document.getElementById('tAddress').value };
-    if (editId) sendPut(`/api/master/trader/${editId}`, bodyData, 'traderMsg', 'traderForm', 'traderSaveBtn', 'Save Trader', 'editTraderMongoId');
-    else sendPost('/api/master/trader', bodyData, 'traderMsg', 'traderForm');
-});
-
-document.getElementById('itemForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!checkMasterPermission()) return;
-    const editId = document.getElementById('editItemMongoId').value;
-    const bodyData = { itemId: document.getElementById('iId').value, itemName: document.getElementById('iName').value, category: document.getElementById('iCat').value, unit: document.getElementById('iUnit').value };
-    if (editId) sendPut(`/api/master/item/${editId}`, bodyData, 'itemMsg', 'itemForm', 'itemSaveBtn', 'Save Item', 'editItemMongoId');
-    else sendPost('/api/master/item', bodyData, 'itemMsg', 'itemForm');
-});
-
-document.getElementById('chicksForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const editId = document.getElementById('editPlacementMongoId').value;
-    const bodyData = { placementId: document.getElementById('cPlacementId').value, date: document.getElementById('cDate').value, farmerId: document.getElementById('cFarmer').value, chicksQty: Number(document.getElementById('cQty').value) };
-    if (editId) sendPut(`/api/entry/chicks-placement/${editId}`, bodyData, 'chicksMsg', 'chicksForm', 'chicksSaveBtn', 'Place Chicks', 'editPlacementMongoId');
-    else sendPost('/api/entry/chicks-placement', bodyData, 'chicksMsg', 'chicksForm');
-});
-
-document.getElementById('feedForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const editId = document.getElementById('editFeedMongoId').value;
-    const bodyData = { challanNo: document.getElementById('challanNo').value, date: document.getElementById('feedDate').value, farmerId: document.getElementById('feedFarmer').value, feedType: document.getElementById('feedType').value, qtyKg: Number(document.getElementById('qtyKg').value) };
-    if (editId) sendPut(`/api/entry/feed-dispatch/${editId}`, bodyData, 'feedMsg', 'feedForm', 'feedSaveBtn', 'Send Feed Dispatch', 'editFeedMongoId');
-    else sendPost('/api/entry/feed-dispatch', bodyData, 'feedMsg', 'feedForm');
-});
-
-document.getElementById('dailyEntryForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const editId = document.getElementById('editDailyMongoId').value;
-    const bodyData = { farmerId: document.getElementById('dailyFarmer').value, date: document.getElementById('dailyDate').value, dayMortality: Number(document.getElementById('dMort').value), dayFeedConsumeKg: Number(document.getElementById('dFeed').value), avgBodyWeightGram: document.getElementById('dBw').value ? Number(document.getElementById('dBw').value) : undefined };
-    if (editId) sendPut(`/api/entry/daily-entry/${editId}`, bodyData, 'dailyEntryMsg', 'dailyEntryForm', 'dailySaveBtn', 'Submit Daily Log & Calculate FCR', 'editDailyMongoId');
-    else sendPost('/api/entry/daily-entry', bodyData, 'dailyEntryMsg', 'dailyEntryForm');
-});

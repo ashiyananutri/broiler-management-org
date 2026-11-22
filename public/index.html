@@ -662,6 +662,7 @@
                     <ul class="sub-menu">
                         <li><div class="menu-item" onclick="switchTab('chicksTab', this)"><span class="nav-label">Chicks Placement</span></div></li>
                         <li><div class="menu-item" onclick="switchTab('feedTab', this)"><span class="nav-label">Feed Dispatch</span></div></li>
+                        <li><div class="menu-item" onclick="switchTab('feedTransferTab', this)"><span class="nav-label">Feed Transfer</span></div></li>
                         <li><div class="menu-item" onclick="switchTab('dailyEntryTab', this)"><span class="nav-label">Daily Farm Log</span></div></li>
                         <li><div class="menu-item" onclick="switchTab('saleEntryTab', this)"><span class="nav-label">Sale / Lifting Entry</span></div></li>
                     </ul>
@@ -695,7 +696,7 @@
                         <div id="userDisplayName" style="font-size: 13.5px; font-weight: 700;">Guest</div>
                         <div id="userRoleBadge" style="font-size: 11.5px; color: var(--text-muted);">Not Logged In</div>
                     </div>
-                    <button type="button" class="btn-secondary" onclick="logout()">Logout</button>
+                    <button type="button" id="logoutBtn" class="btn-secondary" onclick="logout()">Logout</button>
                 </div>
             </header>
 
@@ -705,7 +706,7 @@
                     <div class="card">
                         <div class="card-title">Welcome to Broiler Management System</div>
                         <p style="color: var(--text-muted); font-size: 14px;">
-                            Left menu se Master Data, Transactions (Chicks Placement, Feed Dispatch, Daily Farm Log, Sale / Lifting Entry), ya Reports open karein.
+                            Left menu se Master Data, Transactions (Chicks Placement, Feed Dispatch, Feed Transfer, Daily Farm Log, Sale / Lifting Entry), ya Reports open karein.
                         </p>
                     </div>
                 </section>
@@ -916,28 +917,19 @@
                     <div class="card">
                         <div class="card-title">Item Master</div>
                         <form id="itemForm">
-                            <input type="hidden" id="editItemMongoId">
+                            <input type="hidden" id="editItemId">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="iId">Item ID</label>
-                                    <input type="text" id="iId" required placeholder="Item ID">
+                                    <label for="itemCode">Item Code</label>
+                                    <input type="text" id="itemCode" required placeholder="Item Code">
                                 </div>
                                 <div class="form-group">
-                                    <label for="iName">Item Name</label>
-                                    <input type="text" id="iName" required placeholder="e.g. Pre-Starter">
+                                    <label for="itemName">Item Name</label>
+                                    <input type="text" id="itemName" required placeholder="Item Name">
                                 </div>
                                 <div class="form-group">
-                                    <label for="iCat">Category</label>
-                                    <select id="iCat" required>
-                                        <option value="">-- Category Chunein --</option>
-                                        <option value="Feed">Feed</option>
-                                        <option value="Medicine">Medicine</option>
-                                        <option value="Chicks">Chicks</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="iUnit">Unit</label>
-                                    <input type="text" id="iUnit" required placeholder="KG / Nos / Bottle">
+                                    <label for="itemUnit">Unit</label>
+                                    <input type="text" id="itemUnit" required placeholder="KG / Nos / Bag">
                                 </div>
                             </div>
                             <div class="form-actions">
@@ -951,7 +943,7 @@
                         <div class="table-responsive">
                             <table>
                                 <thead>
-                                    <tr><th>Item ID</th><th>Item Name</th><th>Category</th><th>Unit</th><th>Actions</th></tr>
+                                    <tr><th>Item Code</th><th>Item Name</th><th>Unit</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody id="itemTableBody"></tbody>
                             </table>
@@ -964,49 +956,25 @@
                     <div class="card">
                         <div class="card-title">Chicks Placement</div>
                         <form id="chicksForm">
-                            <input type="hidden" id="editPlacementMongoId">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="cDate">Placement Date</label>
-                                    <input type="date" id="cDate" required>
+                                    <label for="cpDate">Date</label>
+                                    <input type="date" id="cpDate" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="cFarmer">Farmer</label>
-                                    <select id="cFarmer" required onchange="autofillChicksDetails()"></select>
+                                    <label for="cpFarmer">Farmer</label>
+                                    <select id="cpFarmer" required></select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="cSupName">Supervisor</label>
-                                    <input type="text" id="cSupName" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label for="cBranchName">Branch</label>
-                                    <input type="text" id="cBranchName" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label for="cPlacementId">Placement ID</label>
-                                    <input type="text" id="cPlacementId" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="cQty">Chicks Quantity</label>
-                                    <input type="number" id="cQty" min="1" required placeholder="e.g. 2000">
+                                    <label for="cpQty">Chicks Qty</label>
+                                    <input type="number" id="cpQty" required min="1">
                                 </div>
                             </div>
                             <div class="form-actions">
-                                <button type="submit" id="chicksSaveBtn" class="btn-primary">Place Chicks</button>
-                                <span id="chicksMsg" class="status-msg"></span>
+                                <button type="submit" class="btn-primary">Save Placement</button>
+                                <span id="cpMsg" class="status-msg"></span>
                             </div>
                         </form>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Chicks Placement History</div>
-                        <div class="table-responsive">
-                            <table>
-                                <thead>
-                                    <tr><th>Placement ID</th><th>Date</th><th>Farmer</th><th>Branch</th><th>Chicks Qty</th><th>Actions</th></tr>
-                                </thead>
-                                <tbody id="chicksTableBody"></tbody>
-                            </table>
-                        </div>
                     </div>
                 </section>
 
@@ -1015,51 +983,91 @@
                     <div class="card">
                         <div class="card-title">Feed Dispatch</div>
                         <form id="feedForm">
-                            <input type="hidden" id="editFeedMongoId">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="challanNo">Challan No</label>
-                                    <input type="text" id="challanNo" required placeholder="Challan Number">
+                                    <label for="fdDate">Date</label>
+                                    <input type="date" id="fdDate" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="feedDate">Dispatch Date</label>
-                                    <input type="date" id="feedDate" required>
+                                    <label for="fdFarmer">Farmer</label>
+                                    <select id="fdFarmer" required></select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="feedFarmer">Farmer</label>
-                                    <select id="feedFarmer" required onchange="autofillFeedDetails()"></select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="feedSupName">Supervisor</label>
-                                    <input type="text" id="feedSupName" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label for="feedBranchName">Branch</label>
-                                    <input type="text" id="feedBranchName" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label for="feedType">Feed Type</label>
-                                    <select id="feedType" required></select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="qtyKg">Quantity (KG) <span id="bagCalcText" style="color:#059669;"></span></label>
-                                    <input type="number" step="0.01" id="qtyKg" min="0.01" required oninput="calculateBags()" placeholder="e.g. 500">
+                                    <label for="fdQty">Feed Qty (KG)</label>
+                                    <input type="number" id="fdQty" step="0.01" required min="0.01">
                                 </div>
                             </div>
                             <div class="form-actions">
-                                <button type="submit" id="feedSaveBtn" class="btn-primary">Send Feed Dispatch</button>
-                                <span id="feedMsg" class="status-msg"></span>
+                                <button type="submit" class="btn-primary">Save Dispatch</button>
+                                <span id="fdMsg" class="status-msg"></span>
                             </div>
                         </form>
                     </div>
+                </section>
+
+                <!-- Feed Transfer (Farmer to Farmer) -->
+                <section id="feedTransferTab" class="page-section">
                     <div class="card">
-                        <div class="card-title">Feed Dispatch Records</div>
+                        <div class="card-title">Feed Transfer (Farmer to Farmer)</div>
+                        <form id="feedTransferForm">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="ftDate">Date</label>
+                                    <input type="date" id="ftDate" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ftFromFarmer">From Farmer</label>
+                                    <select id="ftFromFarmer" required>
+                                        <option value="">-- Select From Farmer --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ftToFarmer">To Farmer</label>
+                                    <select id="ftToFarmer" required>
+                                        <option value="">-- Select To Farmer --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ftFeedType">Feed Type</label>
+                                    <input type="text" id="ftFeedType" value="Broiler Feed">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ftQtyKg">Quantity (KG)</label>
+                                    <input type="number" id="ftQtyKg" step="0.01" min="0.01" placeholder="e.g. 50" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="ftRemarks">Remarks</label>
+                                    <input type="text" id="ftRemarks" placeholder="Optional note">
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" id="ftSubmitBtn" class="btn-primary">Transfer Feed</button>
+                                <span id="ftMsg" class="status-msg"></span>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">Feed Transfer History</div>
                         <div class="table-responsive">
                             <table>
                                 <thead>
-                                    <tr><th>Challan No</th><th>Date</th><th>Farmer</th><th>Feed Type</th><th>Qty (KG)</th><th>Bags (50kg)</th><th>Status</th><th>Actions</th></tr>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Transfer No</th>
+                                        <th>From Farmer</th>
+                                        <th>To Farmer</th>
+                                        <th>Feed Type</th>
+                                        <th>Qty (KG)</th>
+                                        <th>Remarks</th>
+                                        <th>Action</th>
+                                    </tr>
                                 </thead>
-                                <tbody id="feedTableBody"></tbody>
+                                <tbody id="feedTransferTableBody">
+                                    <tr>
+                                        <td colspan="8" style="text-align:center;">Koi feed transfer record nahi hai.</td>
+                                    </tr>
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -1069,278 +1077,79 @@
                 <section id="dailyEntryTab" class="page-section">
                     <div class="card">
                         <div class="card-title">Daily Farm Log</div>
-                        <form id="dailyEntryForm">
-                            <input type="hidden" id="editDailyMongoId">
+                        <form id="dailyLogForm">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="dailyDate">Log Date</label>
-                                    <input type="date" id="dailyDate" required>
+                                    <label for="dlDate">Date</label>
+                                    <input type="date" id="dlDate" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="dailyFarmer">Farmer</label>
-                                    <select id="dailyFarmer" required onchange="autofillDailyDetails()"></select>
+                                    <label for="dlFarmer">Farmer</label>
+                                    <select id="dlFarmer" required></select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="dailySupName">Supervisor</label>
-                                    <input type="text" id="dailySupName" readonly>
+                                    <label for="dlMortality">Mortality</label>
+                                    <input type="number" id="dlMortality" min="0" value="0">
                                 </div>
                                 <div class="form-group">
-                                    <label for="dailyBranchName">Branch</label>
-                                    <input type="text" id="dailyBranchName" readonly>
+                                    <label for="dlFeedConsumed">Feed Consumed (KG)</label>
+                                    <input type="number" id="dlFeedConsumed" step="0.01" min="0" value="0">
                                 </div>
                                 <div class="form-group">
-                                    <label for="dMort">Day Mortality</label>
-                                    <input type="number" id="dMort" min="0" required placeholder="0">
-                                </div>
-                                <div class="form-group">
-                                    <label for="dFeed">Day Feed Consume (KG)</label>
-                                    <input type="number" step="0.01" id="dFeed" min="0" required placeholder="0.00">
-                                </div>
-                                <div class="form-group">
-                                    <label for="dBw">Avg Body Weight (Gram)</label>
-                                    <input type="number" step="0.01" id="dBw" min="0" placeholder="Optional">
+                                    <label for="dlAvgWeight">Avg Body Weight (KG)</label>
+                                    <input type="number" id="dlAvgWeight" step="0.001" min="0" value="0">
                                 </div>
                             </div>
                             <div class="form-actions">
-                                <button type="submit" id="dailySaveBtn" class="btn-primary">Submit Daily Log & Calculate FCR</button>
-                                <span id="dailyEntryMsg" class="status-msg"></span>
+                                <button type="submit" class="btn-primary">Save Daily Log</button>
+                                <span id="dlMsg" class="status-msg"></span>
                             </div>
                         </form>
                     </div>
-                    <div class="card">
-                        <div class="card-title">Daily Farm Logs</div>
-                        <div class="table-responsive">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Date</th><th>Farmer</th><th>Age</th><th>Placement</th><th>Day Mort</th>
-                                        <th>Total Mort</th><th>Live Chicks</th><th>Avg BW</th><th>Total BW</th>
-                                        <th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th><th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dailyTableBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
                 </section>
 
-                <!-- Sale / Bird Lifting Entry -->
+                <!-- Sale / Lifting Entry -->
                 <section id="saleEntryTab" class="page-section">
                     <div class="card">
-                        <div class="card-title">Bird Lifting Sheet Cum Invoice (Sale Entry)</div>
-                        <form id="saleEntryForm">
-                            <input type="hidden" id="editSaleMongoId">
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="saleSlNo">Sl. No.</label>
-                                    <input type="text" id="saleSlNo" required placeholder="e.g. 3015">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleDate">Date</label>
-                                    <input type="date" id="saleDate" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleSupervisor">Lifting Supervisor</label>
-                                    <select id="saleSupervisor" required></select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleTrader">Trader Name (Name of the Party)</label>
-                                    <select id="saleTrader" required></select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleFarmer">Farmer Name (Name of the Farmer)</label>
-                                    <select id="saleFarmer" required onchange="autofillSaleFarmerDetails()"></select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleBranch">Branch</label>
-                                    <input type="text" id="saleBranch" readonly>
-                                </div>
-                                <div class="form-group">
-                                    <label for="wtStartTime">Wt. Starting Time</label>
-                                    <input type="time" id="wtStartTime">
-                                </div>
-                                <div class="form-group">
-                                    <label for="wtCloseTime">Wt. Closing Time</label>
-                                    <input type="time" id="wtCloseTime">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleDriver">Driver Name</label>
-                                    <input type="text" id="saleDriver" placeholder="Driver Name">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleVehicle">Vehicles No.</label>
-                                    <input type="text" id="saleVehicle" placeholder="Vehicle Number">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleRate">Rate (₹ / KG)</label>
-                                    <input type="number" step="0.01" id="saleRate" placeholder="0.00">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleAge">Age (Days)</label>
-                                    <input type="number" id="saleAge" placeholder="e.g. 35">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleLsName">L.S. Name</label>
-                                    <input type="text" id="saleLsName" placeholder="Line Supervisor Name">
-                                </div>
-                            </div>
-
-                            <!-- 48 Lifting Weight Rows (1-48) -->
-                            <div style="margin-top: 18px;">
-                                <div style="font-weight: 700; margin-bottom: 8px; font-size: 14px;">
-                                    Lifting Weight Details (1 to 48)
-                                </div>
-                                <div class="table-responsive">
-                                    <table id="liftingInputTable" style="min-width: 820px;">
-                                        <thead>
-                                            <tr>
-                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
-                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
-                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
-                                                <th>Sl.</th><th>No. of Birds</th><th>Weight Kg</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="liftingInputBody"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <!-- Auto Summary Box -->
-                            <div class="form-grid" style="margin-top: 16px; background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
-                                <div class="form-group">
-                                    <label>Total Pcs (No. of Birds)</label>
-                                    <input type="text" id="saleTotalPcs" readonly value="0" style="font-weight: 700; color: #2563eb;">
-                                </div>
-                                <div class="form-group">
-                                    <label>Total Weight (Kg)</label>
-                                    <input type="text" id="saleTotalWeight" readonly value="0.00" style="font-weight: 700; color: #059669;">
-                                </div>
-                                <div class="form-group">
-                                    <label>Avg. Body Weight (Kg)</label>
-                                    <input type="text" id="saleAvgBodyWeight" readonly value="0.000" style="font-weight: 700; color: #b45309;">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleFeedClosing">Feed Closing Stock</label>
-                                    <input type="text" id="saleFeedClosing" placeholder="e.g. 0 Bag">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleBirdStock">Bird Stock</label>
-                                    <input type="text" id="saleBirdStock" placeholder="e.g. 0">
-                                </div>
-                                <div class="form-group">
-                                    <label for="saleWeakBirds">Weak Birds</label>
-                                    <input type="text" id="saleWeakBirds" placeholder="e.g. 0">
-                                </div>
-                            </div>
-
-                            <div class="form-actions">
-                                <button type="submit" id="saleSaveBtn" class="btn-primary">Save Sale Entry</button>
-                                <button type="button" class="btn-secondary" onclick="resetSaleForm()">Clear Form</button>
-                                <span id="saleMsg" class="status-msg"></span>
-                            </div>
-                        </form>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-title">Sale / Bird Lifting History</div>
-                        <div class="table-responsive">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Sl. No.</th><th>Date</th><th>Party (Trader)</th><th>Farmer</th>
-                                        <th>Supervisor</th><th>Total Pcs</th><th>Total Wt (Kg)</th><th>Avg. Body Wt</th><th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="saleTableBody"></tbody>
-                            </table>
-                        </div>
+                        <div class="card-title">Sale / Lifting Entry</div>
+                        <p style="color: var(--text-muted); font-size: 13.5px;">
+                            Sale / Lifting entry aur slip details yahan manage ki jaati hain.
+                        </p>
                     </div>
                 </section>
 
-                <!-- Branch-wise Report -->
+                <!-- Reports -->
                 <section id="branchReportTab" class="page-section">
                     <div class="card">
-                        <div class="card-title">Branch-wise Performance Report</div>
-                        <div class="report-controls">
-                            <div class="filter-group">
-                                <select id="reportBranchSelect" onchange="loadReportData('branch')"></select>
-                                <button type="button" class="btn-secondary" onclick="loadReportData('branch')">Refresh</button>
-                            </div>
-                            <div class="export-buttons">
-                                <button type="button" class="btn-excel" onclick="exportTableToExcel('branchReportTable', 'branch_report')">Export Excel</button>
-                                <button type="button" class="btn-pdf" onclick="exportTableToPDF('Branch-wise Report', 'branchReportTable')">Export PDF</button>
-                            </div>
-                        </div>
+                        <div class="card-title">Branch-wise Report</div>
                         <div class="table-responsive">
-                            <table id="branchReportTable">
-                                <thead>
-                                    <tr>
-                                        <th>Farmer</th><th>Branch</th><th>Supervisor</th><th>Age</th>
-                                        <th>Placement</th><th>Mortality</th><th>Live Chicks</th>
-                                        <th>Avg BW</th><th>Total BW</th><th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="branchReportTableBody"></tbody>
-                                <tfoot id="branchReportTableFoot"></tfoot>
+                            <table>
+                                <thead><tr><th>Branch</th><th>Farmers</th><th>Live Chicks</th><th>Closing Feed</th></tr></thead>
+                                <tbody id="branchReportBody"></tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- Supervisor-wise Report -->
                 <section id="supervisorReportTab" class="page-section">
                     <div class="card">
-                        <div class="card-title">Supervisor-wise Performance Report</div>
-                        <div class="report-controls">
-                            <div class="filter-group">
-                                <select id="reportSupSelect" onchange="loadReportData('supervisor')"></select>
-                                <button type="button" class="btn-secondary" onclick="loadReportData('supervisor')">Refresh</button>
-                            </div>
-                            <div class="export-buttons">
-                                <button type="button" class="btn-excel" onclick="exportTableToExcel('supervisorReportTable', 'supervisor_report')">Export Excel</button>
-                                <button type="button" class="btn-pdf" onclick="exportTableToPDF('Supervisor-wise Report', 'supervisorReportTable')">Export PDF</button>
-                            </div>
-                        </div>
+                        <div class="card-title">Supervisor-wise Report</div>
                         <div class="table-responsive">
-                            <table id="supervisorReportTable">
-                                <thead>
-                                    <tr>
-                                        <th>Farmer</th><th>Branch</th><th>Supervisor</th><th>Age</th>
-                                        <th>Placement</th><th>Mortality</th><th>Live Chicks</th>
-                                        <th>Avg BW</th><th>Total BW</th><th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="supervisorReportTableBody"></tbody>
-                                <tfoot id="supervisorReportTableFoot"></tfoot>
+                            <table>
+                                <thead><tr><th>Supervisor</th><th>Branch</th><th>Farmers</th><th>Live Chicks</th></tr></thead>
+                                <tbody id="supervisorReportBody"></tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- Farmer-wise Report -->
                 <section id="farmerReportTab" class="page-section">
                     <div class="card">
-                        <div class="card-title">Farmer-wise Performance Report (Click Farmer Name for Ledger)</div>
-                        <div class="report-controls">
-                            <div class="filter-group">
-                                <button type="button" class="btn-secondary" onclick="loadReportData('farmer')">Refresh</button>
-                            </div>
-                            <div class="export-buttons">
-                                <button type="button" class="btn-excel" onclick="exportTableToExcel('farmerReportTable', 'farmer_report')">Export Excel</button>
-                                <button type="button" class="btn-pdf" onclick="exportTableToPDF('Farmer-wise Report', 'farmerReportTable')">Export PDF</button>
-                            </div>
-                        </div>
+                        <div class="card-title">Farmer-wise Report</div>
                         <div class="table-responsive">
-                            <table id="farmerReportTable">
-                                <thead>
-                                    <tr>
-                                        <th>Farmer</th><th>Branch</th><th>Supervisor</th><th>Age</th>
-                                        <th>Placement</th><th>Mortality</th><th>Live Chicks</th>
-                                        <th>Avg BW</th><th>Total BW</th><th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="farmerReportTableBody"></tbody>
-                                <tfoot id="farmerReportTableFoot"></tfoot>
+                            <table>
+                                <thead><tr><th>Farmer</th><th>Branch</th><th>Live Chicks</th><th>Avg BW</th><th>Closing Feed</th><th>FCR</th></tr></thead>
+                                <tbody id="farmerReportBody"></tbody>
                             </table>
                         </div>
                     </div>
@@ -1349,42 +1158,63 @@
         </div>
     </div>
 
-    <!-- Farmer Ledger Modal -->
-    <div id="ledgerModal" onclick="if(event.target === this) closeLedgerModal()">
+    <!-- Ledger Modal -->
+    <div id="ledgerModal">
         <div class="modal-box">
             <div class="modal-header">
-                <h3 id="modalFarmerTitle">Ledger History</h3>
-                <button type="button" class="btn-secondary" onclick="closeLedgerModal()">✕ Close</button>
+                <h3 id="ledgerModalTitle">Ledger</h3>
+                <button type="button" class="btn-secondary" onclick="closeLedgerModal()">Close</button>
             </div>
-            <div id="modalFarmerInfo" style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 14px;"></div>
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th><th>Age</th><th>Day Mort</th><th>Total Mort</th>
-                            <th>Live Chicks</th><th>Avg BW</th><th>Total BW</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
-                        </tr>
-                    </thead>
-                    <tbody id="modalLedgerBody"></tbody>
-                </table>
-            </div>
+            <div id="ledgerModalBody"></div>
         </div>
     </div>
 
-    <!-- Lifting Sheet Print Modal -->
-    <div id="liftingPrintModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:3000; align-items:center; justify-content:center; padding:12px; overflow-y:auto;" onclick="if(event.target === this) closePrintModal()">
-        <div style="background:#fff; width:100%; max-width:920px; max-height:92vh; overflow-y:auto; border-radius:10px; padding:18px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px;">
-                <h3>Bird Lifting Sheet Cum Invoice — Print Preview</h3>
-                <div style="display:flex; gap:8px;">
-                    <button type="button" class="btn-primary" onclick="printLiftingSheet()">🖨️ Print Sheet</button>
-                    <button type="button" class="btn-secondary" onclick="closePrintModal()">✕ Close</button>
-                </div>
-            </div>
-            <div id="liftingPrintableArea"></div>
-        </div>
-    </div>
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const backdrop = document.getElementById('backdrop');
+            if (window.innerWidth <= 768) {
+                sidebar?.classList.toggle('mobile-open');
+                backdrop?.classList.toggle('active');
+            } else {
+                sidebar?.classList.toggle('collapsed');
+            }
+        }
 
-    <script src="app.js"></script>
+        function toggleSubMenu(itemEl) {
+            const group = itemEl?.closest('.menu-group');
+            if (group) group.classList.toggle('open');
+        }
+
+        function switchTab(tabId, menuEl) {
+            document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
+            const target = document.getElementById(tabId);
+            if (target) target.classList.add('active');
+
+            document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+            if (menuEl) menuEl.classList.add('active');
+
+            const label = menuEl?.querySelector('.nav-label')?.textContent?.trim();
+            if (label) {
+                const headerTitle = document.querySelector('.top-left h3');
+                if (headerTitle) headerTitle.textContent = label;
+            }
+
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar')?.classList.remove('mobile-open');
+                document.getElementById('backdrop')?.classList.remove('active');
+            }
+
+            if (tabId === 'feedTransferTab' && typeof initFeedTransferModule === 'function') {
+                initFeedTransferModule();
+            }
+        }
+
+        function closeLedgerModal() {
+            const modal = document.getElementById('ledgerModal');
+            if (modal) modal.style.display = 'none';
+        }
+    </script>
+    <script src="/app.js"></script>
 </body>
 </html>

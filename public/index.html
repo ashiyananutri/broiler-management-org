@@ -476,7 +476,7 @@
         .modal-box {
             background: var(--white);
             width: 100%;
-            max-width: 960px;
+            max-width: 1020px;
             max-height: 88vh;
             overflow-y: auto;
             border-radius: 12px;
@@ -492,9 +492,7 @@
             margin-bottom: 10px;
         }
 
-        /* =========================================================
-           MOBILE RESPONSIVE OPTIMIZATION (Screens <= 768px)
-           ========================================================= */
+        /* Mobile Responsive Optimization */
         @media (max-width: 768px) {
             #sidebar {
                 position: fixed;
@@ -542,13 +540,11 @@
                 font-size: 15.5px;
             }
 
-            /* Stack forms cleanly in single column */
             .form-grid {
                 grid-template-columns: 1fr;
                 gap: 10px;
             }
 
-            /* Prevent auto-zoom on iOS/Android and make touch targets generous */
             input,
             select,
             textarea {
@@ -566,7 +562,6 @@
                 padding: 11px 14px;
             }
 
-            /* Stack report filters & export buttons */
             .report-controls,
             .filter-group,
             .export-buttons {
@@ -1119,7 +1114,7 @@
                                     <tr>
                                         <th>Date</th><th>Farmer</th><th>Age</th><th>Placement</th><th>Day Mort</th>
                                         <th>Total Mort</th><th>Live Chicks</th><th>Avg BW</th><th>Total BW</th>
-                                        <th>Total Feed</th><th>FCR</th><th>Actions</th>
+                                        <th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="dailyTableBody"></tbody>
@@ -1148,7 +1143,7 @@
                                     <tr>
                                         <th>Farmer</th><th>Branch</th><th>Supervisor</th><th>Age</th>
                                         <th>Placement</th><th>Mortality</th><th>Live Chicks</th>
-                                        <th>Avg BW</th><th>Total BW</th><th>Total Feed</th><th>FCR</th>
+                                        <th>Avg BW</th><th>Total BW</th><th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
                                     </tr>
                                 </thead>
                                 <tbody id="branchReportTableBody"></tbody>
@@ -1178,7 +1173,7 @@
                                     <tr>
                                         <th>Farmer</th><th>Branch</th><th>Supervisor</th><th>Age</th>
                                         <th>Placement</th><th>Mortality</th><th>Live Chicks</th>
-                                        <th>Avg BW</th><th>Total BW</th><th>Total Feed</th><th>FCR</th>
+                                        <th>Avg BW</th><th>Total BW</th><th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
                                     </tr>
                                 </thead>
                                 <tbody id="supervisorReportTableBody"></tbody>
@@ -1207,7 +1202,7 @@
                                     <tr>
                                         <th>Farmer</th><th>Branch</th><th>Supervisor</th><th>Age</th>
                                         <th>Placement</th><th>Mortality</th><th>Live Chicks</th>
-                                        <th>Avg BW</th><th>Total BW</th><th>Total Feed</th><th>FCR</th>
+                                        <th>Avg BW</th><th>Total BW</th><th>Feed In</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
                                     </tr>
                                 </thead>
                                 <tbody id="farmerReportTableBody"></tbody>
@@ -1233,7 +1228,7 @@
                     <thead>
                         <tr>
                             <th>Date</th><th>Age</th><th>Day Mort</th><th>Total Mort</th>
-                            <th>Live Chicks</th><th>Avg BW</th><th>Total BW</th><th>Total Feed</th><th>FCR</th>
+                            <th>Live Chicks</th><th>Avg BW</th><th>Total BW</th><th>Total Feed</th><th>Closing Feed</th><th>FCR</th>
                         </tr>
                     </thead>
                     <tbody id="modalLedgerBody"></tbody>

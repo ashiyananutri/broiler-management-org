@@ -15,6 +15,15 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 let idleTimerId = null;
 let sessionPollId = null;
 
+function extractList(payload, keys = []) {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+    for (const k of [...keys, 'data', 'items', 'records', 'results']) {
+        if (Array.isArray(payload[k])) return payload[k];
+    }
+    return [];
+}
+
 function getSavedSession() {
     try {
         return JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || 'null');
@@ -46,6 +55,7 @@ function getAuthHeaders() {
 
 function applyLoggedInUI(user) {
     currentUser = user;
+    document.body.classList.add('is-logged-in');
     const overlay = document.getElementById('loginOverlay');
     if (overlay) overlay.style.display = 'none';
 
@@ -68,6 +78,7 @@ function applyLoggedInUI(user) {
 
 function forceLogout(reasonMessage = 'Aap logout ho gaye hain. Kripya dobara login karein.') {
     currentUser = null;
+    document.body.classList.remove('is-logged-in');
     clearSavedSession();
     if (idleTimerId) clearTimeout(idleTimerId);
     if (sessionPollId) clearInterval(sessionPollId);
@@ -199,6 +210,7 @@ window.addEventListener('DOMContentLoaded', () => {
     setDefaultDates();
     initActivityListeners();
     initFeedTransferModule();
+    bindFormHandlers();
 
     const loginForm = document.getElementById('loginForm');
     if (loginForm && !loginForm.dataset.authBound) {
@@ -233,20 +245,34 @@ function setDefaultDates() {
 }
 
 function generateBranchCode() {
-    const name = document.getElementById('branchName').value.trim();
-    if (name.length > 0 && !document.getElementById('editBranchId').value) {
+    const name = document.getElementById('branchName')?.value.trim() || '';
+    if (name.length > 0 && !document.getElementById('editBranchId')?.value) {
         const prefix = name.substring(0, 3).toUpperCase();
         const rand = Math.floor(10 + Math.random() * 90);
-        document.getElementById('branchId').value = `${prefix}-${rand}`;
+        const target = document.getElementById('branchId');
+        if (target) target.value = `${prefix}-${rand}`;
+    }
+}
+
+function autofillBranchFromSupervisor() {
+    const supSel = document.getElementById('fSup');
+    const brSel = document.getElementById('fBranch');
+    if (!supSel || !brSel) return;
+    const opt = supSel.options[supSel.selectedIndex];
+    const brId = opt?.getAttribute('data-branch');
+    if (brId && brId !== 'undefined' && brId !== 'null') {
+        brSel.value = brId;
+        generateFarmerId();
     }
 }
 
 function generateFarmerId() {
-    const farmerName = document.getElementById('fName').value.trim();
+    const farmerName = document.getElementById('fName')?.value.trim() || '';
     const branchSelect = document.getElementById('fBranch');
+    if (!branchSelect) return;
     const selectedBranchText = branchSelect.selectedIndex > 0 ? branchSelect.options[branchSelect.selectedIndex].text : '';
 
-    if (farmerName.length > 0 && selectedBranchText && !document.getElementById('editFarmerId').value) {
+    if (farmerName.length > 0 && selectedBranchText && !document.getElementById('editFarmerId')?.value) {
         let branchPrefix = "BR";
         if (selectedBranchText.includes('(')) {
             const match = selectedBranchText.match(/\(([^)]+)\)/);
@@ -254,7 +280,8 @@ function generateFarmerId() {
         }
         const namePrefix = farmerName.substring(0, 3).toUpperCase();
         const randNum = Math.floor(10 + Math.random() * 90);
-        document.getElementById('fId').value = `${branchPrefix}-${namePrefix}-${randNum}`;
+        const target = document.getElementById('fId');
+        if (target) target.value = `${branchPrefix}-${namePrefix}-${randNum}`;
     }
 }
 
@@ -263,7 +290,7 @@ async function loadDropdownData() {
         let users = [];
         const branchRes = await apiFetch('/api/master/branch');
         if (branchRes.ok) {
-            allBranches = await branchRes.json();
+            allBranches = extractList(await branchRes.json(), ['branches']);
             const branchSelects = [document.getElementById('uBranch'), document.getElementById('fBranch')];
             branchSelects.forEach(select => {
                 if (select) {
@@ -278,15 +305,15 @@ async function loadDropdownData() {
 
         const userRes = await apiFetch('/api/master/user');
         if (userRes.ok) {
-            users = await userRes.json();
+            users = extractList(await userRes.json(), ['users']);
             allSupervisors = users.filter(u => u.role && u.role.toLowerCase() === 'supervisor');
             const supSelect = document.getElementById('fSup');
             if (supSelect) {
                 supSelect.innerHTML = '<option value="">-- Supervisor Chunein --</option>';
                 allSupervisors.forEach(s => {
-                    let branchId = s.branch && s.branch._id ? s.branch._id : s.branch;
-                    let branchNameStr = s.branch && s.branch.branchName ? ` [${s.branch.branchName}]` : '';
-                    supSelect.innerHTML += `<option value="${s._id}" data-branch="${branchId}">${s.fullName} (${s.userId})${branchNameStr}</option>`;
+                    const branchId = s.branch && s.branch._id ? s.branch._id : s.branch;
+                    const branchNameStr = s.branch && s.branch.branchName ? ` [${s.branch.branchName}]` : '';
+                    supSelect.innerHTML += `<option value="${s._id}" data-branch="${branchId || ''}">${s.fullName} (${s.userId})${branchNameStr}</option>`;
                 });
             }
             renderUserTable(users);
@@ -294,7 +321,7 @@ async function loadDropdownData() {
 
         const farmerRes = await apiFetch('/api/master/farmer');
         if (farmerRes.ok) {
-            allFarmers = await farmerRes.json();
+            allFarmers = extractList(await farmerRes.json(), ['farmers']);
             const farmerSelects = [
                 document.getElementById('cFarmer'),
                 document.getElementById('feedFarmer'),
@@ -308,10 +335,10 @@ async function loadDropdownData() {
                         const branchName = f.branch && f.branch.branchName ? f.branch.branchName : 'Branch';
                         const branchCode = f.branch && f.branch.branchId ? f.branch.branchId : 'BR';
 
-                        farmerSelect.innerHTML += `<option value="${f._id}" 
-                            data-supname="${supName}" 
-                            data-branchname="${branchName}" 
-                            data-branchcode="${branchCode}" 
+                        farmerSelect.innerHTML += `<option value="${f._id}"
+                            data-supname="${supName}"
+                            data-branchname="${branchName}"
+                            data-branchcode="${branchCode}"
                             data-farmerid="${f.farmerId}">
                             ${f.farmerName} (${f.farmerId})
                         </option>`;
@@ -324,7 +351,7 @@ async function loadDropdownData() {
 
         const traderRes = await apiFetch('/api/master/trader');
         if (traderRes.ok) {
-            allTraders = await traderRes.json();
+            allTraders = extractList(await traderRes.json(), ['traders']);
             renderTraderTable(allTraders);
         }
 
@@ -332,15 +359,15 @@ async function loadDropdownData() {
 
         const itemRes = await apiFetch('/api/master/item');
         if (itemRes.ok) {
-            const items = await itemRes.json();
+            const items = extractList(await itemRes.json(), ['items']);
             renderItemTable(items);
 
             const feedTypeSelect = document.getElementById('feedType');
             if (feedTypeSelect) {
                 feedTypeSelect.innerHTML = '<option value="">-- Feed Type Chunein --</option>';
                 const feedItems = items.filter(i => i.category && i.category.toLowerCase() === 'feed');
-                feedItems.forEach(item => {
-                    feedTypeSelect.innerHTML += `<option value="${item.itemName}">${item.itemName} (${item.itemId})</option>`;
+                (feedItems.length ? feedItems : items).forEach(item => {
+                    feedTypeSelect.innerHTML += `<option value="${item.itemName}">${item.itemName} (${item.itemId || ''})</option>`;
                 });
             }
         }
@@ -353,7 +380,7 @@ async function loadReportDropdowns() {
     try {
         const branchRes = await apiFetch('/api/master/branch');
         if (branchRes.ok) {
-            const branches = await branchRes.json();
+            const branches = extractList(await branchRes.json(), ['branches']);
             const bSelect = document.getElementById('reportBranchSelect');
             if (bSelect) {
                 bSelect.innerHTML = '<option value="">-- Sabhi Branches --</option>';
@@ -365,7 +392,7 @@ async function loadReportDropdowns() {
 
         const userRes = await apiFetch('/api/master/user');
         if (userRes.ok) {
-            const users = await userRes.json();
+            const users = extractList(await userRes.json(), ['users']);
             const supervisors = users.filter(u => u.role && u.role.toLowerCase() === 'supervisor');
             const sSelect = document.getElementById('reportSupSelect');
             if (sSelect) {
@@ -388,17 +415,19 @@ async function loadEntriesData() {
             apiFetch('/api/entry/daily-entry')
         ]);
 
-        if (placementRes.ok) renderChicksTable(await placementRes.json());
+        if (placementRes.ok) {
+            renderChicksTable(extractList(await placementRes.json(), ['placements', 'chicksPlacements']));
+        }
 
         let feeds = [];
         if (feedRes.ok) {
-            feeds = await feedRes.json();
+            feeds = extractList(await feedRes.json(), ['feeds', 'feedDispatches']);
             allFeedDispatches = feeds;
             renderFeedTable(feeds);
         }
 
         if (dailyRes.ok) {
-            const dailies = await dailyRes.json();
+            const dailies = extractList(await dailyRes.json(), ['entries', 'dailyEntries']);
             renderDailyTable(dailies, feeds);
         }
     } catch (e) {
@@ -407,14 +436,10 @@ async function loadEntriesData() {
 }
 
 function calculateBags() {
-    const qty = Number(document.getElementById('qtyKg').value) || 0;
+    const qty = Number(document.getElementById('qtyKg')?.value) || 0;
     const bagsSpan = document.getElementById('bagCalcText');
-    if (qty > 0) {
-        const bags = (qty / 50).toFixed(2);
-        bagsSpan.innerText = `= ${bags} Bags`;
-    } else {
-        bagsSpan.innerText = '';
-    }
+    if (!bagsSpan) return;
+    bagsSpan.innerText = qty > 0 ? `= ${(qty / 50).toFixed(2)} Bags` : '';
 }
 
 function renderBranchTable(branches) {
@@ -422,10 +447,10 @@ function renderBranchTable(branches) {
     if (!tbody) return;
     tbody.innerHTML = branches.map(b => `
         <tr>
-            <td>${b.branchId}</td><td>${b.branchName}</td><td>${b.address}</td>
+            <td>${b.branchId || ''}</td><td>${b.branchName || ''}</td><td>${b.address || ''}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editBranch('${b._id}', '${b.branchId}', '${b.branchName}', '${b.address}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/master/branch/${b._id}')">Delete</button>
+                <button type="button" class="action-btn btn-edit" onclick="editBranch('${b._id}', '${b.branchId || ''}', '${b.branchName || ''}', '${b.address || ''}')">Edit</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/branch/${b._id}')">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -435,10 +460,10 @@ function renderUserTable(users) {
     if (!tbody) return;
     tbody.innerHTML = users.map(u => `
         <tr>
-            <td>${u.userId}</td><td>${u.fullName}</td><td>${u.role}</td><td>${u.branch ? u.branch.branchName : 'N/A'}</td><td>${u.mobileNumber}</td>
+            <td>${u.userId || ''}</td><td>${u.fullName || ''}</td><td>${u.role || ''}</td><td>${u.branch ? u.branch.branchName : 'N/A'}</td><td>${u.mobileNumber || ''}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editUser('${u._id}', '${u.userId}', '${u.fullName}', '${u.role}', '${u.branch ? u.branch._id : ''}', '${u.mobileNumber}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/master/user/${u._id}')">Delete</button>
+                <button type="button" class="action-btn btn-edit" onclick="editUser('${u._id}', '${u.userId || ''}', '${u.fullName || ''}', '${u.role || ''}', '${u.branch ? u.branch._id : ''}', '${u.mobileNumber || ''}')">Edit</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/user/${u._id}')">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -448,10 +473,10 @@ function renderFarmerTable(farmers) {
     if (!tbody) return;
     tbody.innerHTML = farmers.map(f => `
         <tr>
-            <td>${f.farmerId}</td><td>${f.farmerName}</td><td>${f.supervisor ? f.supervisor.fullName : 'N/A'}</td><td>${f.branch ? f.branch.branchName : 'N/A'}</td><td>${f.mobileNo}</td>
+            <td>${f.farmerId || ''}</td><td>${f.farmerName || ''}</td><td>${f.supervisor ? f.supervisor.fullName : 'N/A'}</td><td>${f.branch ? f.branch.branchName : 'N/A'}</td><td>${f.mobileNo || ''}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editFarmer('${f._id}', '${f.farmerId}', '${f.farmerName}', '${f.supervisor ? f.supervisor._id : ''}', '${f.branch ? f.branch._id : ''}', '${f.mobileNo}', '${f.address}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/master/farmer/${f._id}')">Delete</button>
+                <button type="button" class="action-btn btn-edit" onclick="editFarmer('${f._id}', '${f.farmerId || ''}', '${f.farmerName || ''}', '${f.supervisor ? f.supervisor._id : ''}', '${f.branch ? f.branch._id : ''}', '${f.mobileNo || ''}', '${f.address || ''}')">Edit</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/farmer/${f._id}')">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -461,10 +486,10 @@ function renderTraderTable(traders) {
     if (!tbody) return;
     tbody.innerHTML = traders.map(t => `
         <tr>
-            <td>${t.traderId}</td><td>${t.traderName}</td><td>${t.mobileNo}</td><td>${t.address}</td>
+            <td>${t.traderId || ''}</td><td>${t.traderName || ''}</td><td>${t.mobileNo || ''}</td><td>${t.address || ''}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editTrader('${t._id}', '${t.traderId}', '${t.traderName}', '${t.mobileNo}', '${t.address}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/master/trader/${t._id}')">Delete</button>
+                <button type="button" class="action-btn btn-edit" onclick="editTrader('${t._id}', '${t.traderId || ''}', '${t.traderName || ''}', '${t.mobileNo || ''}', '${t.address || ''}')">Edit</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/trader/${t._id}')">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -474,10 +499,10 @@ function renderItemTable(items) {
     if (!tbody) return;
     tbody.innerHTML = items.map(i => `
         <tr>
-            <td>${i.itemId}</td><td>${i.itemName}</td><td>${i.category}</td><td>${i.unit}</td>
+            <td>${i.itemId || ''}</td><td>${i.itemName || ''}</td><td>${i.category || ''}</td><td>${i.unit || ''}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editItem('${i._id}', '${i.itemId}', '${i.itemName}', '${i.category}', '${i.unit}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/master/item/${i._id}')">Delete</button>
+                <button type="button" class="action-btn btn-edit" onclick="editItem('${i._id}', '${i.itemId || ''}', '${i.itemName || ''}', '${i.category || ''}', '${i.unit || ''}')">Edit</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/item/${i._id}')">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -487,14 +512,13 @@ function renderChicksTable(placements) {
     if (!tbody) return;
     tbody.innerHTML = placements.map(p => `
         <tr>
-            <td>${p.placementId}</td>
+            <td>${p.placementId || ''}</td>
             <td>${p.date ? new Date(p.date).toLocaleDateString('en-GB') : ''}</td>
             <td>${p.farmer ? p.farmer.farmerName : 'N/A'}</td>
             <td>${p.branch ? p.branch.branchName : 'N/A'}</td>
-            <td>${p.chicksQty}</td>
+            <td>${p.chicksQty || 0}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editPlacement('${p._id}', '${p.placementId}', '${p.date ? p.date.split('T')[0] : ''}', '${p.farmer ? p.farmer._id : ''}', '${p.chicksQty}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/entry/chicks-placement/${p._id}')">Delete</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/entry/chicks-placement/${p._id}')">Delete</button>
             </td>
         </tr>`).join('');
 }
@@ -503,24 +527,23 @@ function renderFeedTable(feeds) {
     const tbody = document.getElementById('feedTableBody');
     if (!tbody) return;
     tbody.innerHTML = feeds.map(f => {
-        const bags = (f.qtyKg / 50).toFixed(2);
+        const bags = (Number(f.qtyKg || 0) / 50).toFixed(2);
         const isApproved = f.status === 'Approved';
         const statusBadge = isApproved ? `<span class="badge-approved">Approved</span>` : `<span class="badge-pending">Pending</span>`;
-        const approveBtn = !isApproved ? `<button class="action-btn btn-approve" onclick="approveFeedDispatch('${f._id}')">Approve</button>` : '';
+        const approveBtn = !isApproved ? `<button type="button" class="action-btn btn-approve" onclick="approveFeedDispatch('${f._id}')">Approve</button>` : '';
 
         return `
         <tr>
-            <td>${f.challanNo}</td>
+            <td>${f.challanNo || ''}</td>
             <td>${f.date ? new Date(f.date).toLocaleDateString('en-GB') : ''}</td>
             <td>${f.farmer ? f.farmer.farmerName : 'N/A'}</td>
-            <td>${f.feedType}</td>
-            <td>${f.qtyKg} KG</td>
+            <td>${f.feedType || ''}</td>
+            <td>${f.qtyKg || 0} KG</td>
             <td style="font-weight:600; color:#059669;">${bags} Bags</td>
             <td>${statusBadge}</td>
             <td>
                 ${approveBtn}
-                <button class="action-btn btn-edit" onclick="editFeed('${f._id}', '${f.challanNo}', '${f.date ? f.date.split('T')[0] : ''}', '${f.farmer ? f.farmer._id : ''}', '${f.feedType}', '${f.qtyKg}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/entry/feed-dispatch/${f._id}')">Delete</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/entry/feed-dispatch/${f._id}')">Delete</button>
             </td>
         </tr>`;
     }).join('');
@@ -532,9 +555,8 @@ async function approveFeedDispatch(id) {
         const res = await apiFetch(`/api/entry/feed-dispatch/approve/${id}`, { method: 'PUT' });
         const data = await res.json();
         if (res.ok) {
-            alert(data.message);
+            alert(data.message || 'Approved');
             loadEntriesData();
-            if (typeof refreshActiveReportTab === 'function') refreshActiveReportTab();
         } else {
             alert(data.error || "Approval fail ho gaya!");
         }
@@ -588,7 +610,7 @@ function renderDailyTable(entries, feedsList = allFeedDispatches) {
         <tr>
             <td>${d.date ? new Date(d.date).toLocaleDateString('en-GB') : ''}</td>
             <td>${d.farmer ? d.farmer.farmerName : 'N/A'}</td>
-            <td>${d.days}</td>
+            <td>${d.days || 0}</td>
             <td style="font-weight:600; color:#3b82f6;">${d.totalPlacementChicks || 0}</td>
             <td>${d.dayMortality || 0}</td>
             <td style="color:#ef4444; font-weight:600;">${d.totalMortality || 0} (${d.mortalityPercentage || 0}%)</td>
@@ -600,8 +622,7 @@ function renderDailyTable(entries, feedsList = allFeedDispatches) {
             <td style="font-weight:700; color:${closingColor};">${closingFeed.toFixed(2)} KG</td>
             <td style="font-weight:bold;">${fcrVal}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editDaily('${d._id}', '${d.date ? d.date.split('T')[0] : ''}', '${farmerId || ''}', '${d.dayMortality}', '${d.dayFeedConsumeKg}', '${d.avgBodyWeightGram}')">Edit</button>
-                <button class="action-btn btn-delete" onclick="deleteRecord('/api/entry/daily-entry/${d._id}')">Delete</button>
+                <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/entry/daily-entry/${d._id}')">Delete</button>
             </td>
         </tr>`;
     }).join('');
@@ -619,8 +640,8 @@ async function populateFeedTransferFarmers() {
     if (!Array.isArray(farmers) || farmers.length === 0) {
         const res = await apiFetch('/api/master/farmer');
         if (res.ok) {
-            const raw = await res.json();
-            farmers = Array.isArray(raw) ? raw : (raw.farmers || raw.data || []);
+            farmers = extractList(await res.json(), ['farmers']);
+            allFarmers = farmers;
         }
     }
 
@@ -654,7 +675,7 @@ async function loadFeedTransfers() {
             throw new Error(raw.error || raw.message || 'Feed transfer load nahi ho paya.');
         }
 
-        const list = Array.isArray(raw) ? raw : (raw.transfers || raw.data || []);
+        const list = extractList(raw, ['transfers']);
         if (!list.length) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Koi feed transfer record nahi hai.</td></tr>';
             return;
@@ -796,12 +817,8 @@ function recalcSaleSummary() {
     let totalPcs = 0;
     let totalWt = 0;
 
-    birdInputs.forEach(inp => {
-        totalPcs += Number(inp.value || 0);
-    });
-    wtInputs.forEach(inp => {
-        totalWt += Number(inp.value || 0);
-    });
+    birdInputs.forEach(inp => { totalPcs += Number(inp.value || 0); });
+    wtInputs.forEach(inp => { totalWt += Number(inp.value || 0); });
 
     totalWt = Number(totalWt.toFixed(2));
     const avgBodyWt = totalPcs > 0 ? (totalWt / totalPcs).toFixed(3) : '0.000';
@@ -831,14 +848,15 @@ function collectLiftingRows() {
 
 function autofillSaleFarmerDetails() {
     const fSel = document.getElementById('saleFarmer');
+    if (!fSel) return;
     const opt = fSel.options[fSel.selectedIndex];
     const brInp = document.getElementById('saleBranch');
     const lsInp = document.getElementById('saleLsName');
-    if (fSel && fSel.value && opt) {
+    if (fSel.value && opt) {
         if (brInp) brInp.value = opt.getAttribute('data-branchname') || '';
         if (lsInp && !lsInp.value) lsInp.value = opt.getAttribute('data-supname') || '';
-    } else {
-        if (brInp) brInp.value = '';
+    } else if (brInp) {
+        brInp.value = '';
     }
 }
 
@@ -874,7 +892,7 @@ async function loadSaleEntries() {
     try {
         const res = await apiFetch('/api/sale');
         if (res.ok) {
-            allSaleEntries = await res.json();
+            allSaleEntries = extractList(await res.json(), ['sales', 'entries']);
             renderSaleTable(allSaleEntries);
         }
     } catch (e) {
@@ -892,7 +910,7 @@ function renderSaleTable(list) {
 
     tbody.innerHTML = list.map(s => `
         <tr>
-            <td><b>${s.slNo}</b></td>
+            <td><b>${s.slNo || ''}</b></td>
             <td>${s.date ? new Date(s.date).toLocaleDateString('en-GB') : ''}</td>
             <td>${s.partyName || 'N/A'}</td>
             <td>${s.farmerName || 'N/A'}</td>
@@ -902,7 +920,6 @@ function renderSaleTable(list) {
             <td style="font-weight:700; color:#b45309;">${Number(s.avgBodyWeightKg || 0).toFixed(3)} Kg</td>
             <td>
                 <button type="button" class="action-btn btn-approve" onclick="openSalePrintSheet('${s._id}')">Print</button>
-                <button type="button" class="action-btn btn-edit" onclick="editSaleEntry('${s._id}')">Edit</button>
                 <button type="button" class="action-btn btn-delete" onclick="deleteSaleEntry('${s._id}')">Delete</button>
             </td>
         </tr>
@@ -912,59 +929,22 @@ function renderSaleTable(list) {
 function resetSaleForm() {
     const form = document.getElementById('saleEntryForm');
     if (form) form.reset();
-    document.getElementById('editSaleMongoId').value = '';
-    if (document.getElementById('saleSaveBtn')) {
-        document.getElementById('saleSaveBtn').innerText = 'Save Sale Entry';
-    }
+    const editId = document.getElementById('editSaleMongoId');
+    if (editId) editId.value = '';
+    const saveBtn = document.getElementById('saleSaveBtn');
+    if (saveBtn) saveBtn.innerText = 'Save Sale Entry';
     const today = new Date().toISOString().split('T')[0];
     if (document.getElementById('saleDate')) document.getElementById('saleDate').value = today;
     buildLiftingRows();
     recalcSaleSummary();
 }
 
-function editSaleEntry(id) {
-    const s = allSaleEntries.find(item => item._id === id);
-    if (!s) return;
-
-    document.getElementById('editSaleMongoId').value = s._id;
-    document.getElementById('saleSlNo').value = s.slNo || '';
-    document.getElementById('saleDate').value = s.date ? s.date.split('T')[0] : '';
-    document.getElementById('saleSupervisor').value = s.liftingSupervisor || '';
-    document.getElementById('saleTrader').value = s.trader || '';
-    document.getElementById('saleFarmer').value = s.farmer || '';
-    autofillSaleFarmerDetails();
-    document.getElementById('wtStartTime').value = s.wtStartingTime || '';
-    document.getElementById('wtCloseTime').value = s.wtClosingTime || '';
-    document.getElementById('saleDriver').value = s.driverName || '';
-    document.getElementById('saleVehicle').value = s.vehicleNo || '';
-    document.getElementById('saleRate').value = s.rate || '';
-    document.getElementById('saleAge').value = s.age || '';
-    document.getElementById('saleLsName').value = s.lsName || '';
-    document.getElementById('saleFeedClosing').value = s.feedClosingStock || '';
-    document.getElementById('saleBirdStock').value = s.birdStock || '';
-    document.getElementById('saleWeakBirds').value = s.weakBirds || '';
-
-    buildLiftingRows();
-    (s.rows || []).forEach(r => {
-        const bInp = document.querySelector(`.lift-birds[data-sl="${r.slNo}"]`);
-        const wInp = document.querySelector(`.lift-wt[data-sl="${r.slNo}"]`);
-        if (bInp && r.noOfBirds) bInp.value = r.noOfBirds;
-        if (wInp && r.weightKg) wInp.value = r.weightKg;
-    });
-
-    recalcSaleSummary();
-    if (document.getElementById('saleSaveBtn')) {
-        document.getElementById('saleSaveBtn').innerText = 'Update Sale Entry';
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
 async function deleteSaleEntry(id) {
     if (!confirm('Kya aap is sale entry ko delete karna chahte hain?')) return;
     const res = await apiFetch(`/api/sale/${id}`, { method: 'DELETE' });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (res.ok) {
-        alert(data.message);
+        alert(data.message || 'Deleted');
         loadSaleEntries();
     } else {
         alert(data.error || 'Delete fail hua!');
@@ -991,21 +971,10 @@ async function deleteRecord(url) {
 
 function openSalePrintSheet(id) {
     const s = allSaleEntries.find(item => item._id === id);
-    const printArea = document.getElementById('liftingPrintableArea');
-    if (!s || !printArea) return;
+    if (!s) return;
 
     const rowsMap = {};
     (s.rows || []).forEach(r => { rowsMap[r.slNo] = r; });
-
-    const colTotals = [0, 1, 2, 3].map(c => {
-        let pcs = 0, wt = 0;
-        for (let r = 0; r < 12; r++) {
-            const sl = c * 12 + r + 1;
-            pcs += Number(rowsMap[sl]?.noOfBirds || 0);
-            wt += Number(rowsMap[sl]?.weightKg || 0);
-        }
-        return { pcs, wt: Number(wt.toFixed(2)) };
-    });
 
     let gridRowsHtml = '';
     for (let r = 0; r < 12; r++) {
@@ -1023,86 +992,22 @@ function openSalePrintSheet(id) {
         gridRowsHtml += '</tr>';
     }
 
-    const colTotalRowHtml = `
-        <tr style="font-weight:700; background:#ffe4ec;">
-            ${[0, 1, 2, 3].map(c => `
-                <td style="text-align:center;">Total</td>
-                <td style="text-align:center;">${colTotals[c].pcs || ''}</td>
-                <td style="text-align:right;">${colTotals[c].wt ? colTotals[c].wt.toFixed(2) : ''}</td>
-            `).join('')}
-        </tr>
-    `;
-
     const formattedDate = s.date ? new Date(s.date).toLocaleDateString('en-GB') : '';
-
-    printArea.innerHTML = `
-        <div id="sheetPaper" style="background:#ffb6c8; color:#111827; border:2px solid #be185d; padding:12px; font-family:'Segoe UI', Arial, sans-serif; font-size:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1.5px solid #9d174d; padding-bottom:6px; margin-bottom:8px;">
-                <div style="font-weight:800; font-size:15px; color:#831843;">
-                    ASHIYANA<br><span style="font-size:10px; letter-spacing:1px;">NUTRITION</span>
-                </div>
-                <div style="text-align:center; flex:1;">
-                    <div style="font-size:11px; font-weight:600;">(Commercial Broiler Farm Division)</div>
-                    <div style="font-size:10.5px;">Ward No. 10, Basmata, Satsang Road, Near Petrol Pump, Po. + Ps. Deoghar, Dist. B. Deoghar (Jharkhand)-814116</div>
-                    <div style="font-size:15px; font-weight:800; margin-top:2px; text-decoration:underline;">BIRD LIFTING SHEET CUM INVOICE</div>
-                </div>
-                <div style="text-align:right; font-weight:800; font-size:13px; color:#831843;">
-                    Sl. No. <span style="font-size:16px; border-bottom:1.5px solid #831843; padding:0 6px;">${s.slNo || ''}</span>
-                </div>
+    const html = `
+        <div style="border:2px solid #be185d; padding:12px; background:#fff1f2; color:#111827; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; border-bottom:1.5px solid #9d174d; padding-bottom:6px; margin-bottom:8px;">
+                <div><b>ASHIYANA NUTRITION</b></div>
+                <div><b>BIRD LIFTING SHEET</b></div>
+                <div><b>Sl. No.: ${s.slNo || ''}</b></div>
             </div>
-
-            <div style="display:grid; grid-template-columns:1.25fr 1fr; gap:8px; margin-bottom:8px;">
-                <div style="border:1px solid #9d174d; padding:6px 8px; background:rgba(255,255,255,0.45);">
-                    <div style="margin-bottom:4px;"><b>Name of the Party:</b> <span style="font-size:13.5px; font-weight:700;">${s.partyName || ''}</span></div>
-                    <div><b>Name of the Farmer:</b> <span style="font-size:13.5px; font-weight:700;">${s.farmerName || ''}</span></div>
-                </div>
-                <div style="border:1px solid #9d174d; padding:6px 8px; background:rgba(255,255,255,0.45); display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; font-size:11px;">
-                    <div><b>Date:</b> ${formattedDate}</div>
-                    <div><b>Branch:</b> ${s.branchName || ''}</div>
-                    <div><b>Wt. Starting Time:</b> ${s.wtStartingTime || ''}</div>
-                    <div><b>Rate:</b> ${s.rate || ''}</div>
-                    <div><b>Wt. Closing Time:</b> ${s.wtClosingTime || ''}</div>
-                    <div><b>Age:</b> ${s.age || ''}</div>
-                    <div><b>Driver Name:</b> ${s.driverName || ''}</div>
-                    <div><b>L.S. Name:</b> ${s.lsName || ''}</div>
-                    <div style="grid-column:span 2;"><b>Vehicles No.:</b> ${s.vehicleNo || ''} | <b>Lifting Supervisor:</b> ${s.liftingSupervisorName || ''}</div>
-                </div>
+            <div style="margin-bottom:8px;">
+                <b>Date:</b> ${formattedDate} | <b>Party:</b> ${s.partyName || ''} | <b>Farmer:</b> ${s.farmerName || ''} | <b>Branch:</b> ${s.branchName || ''}
             </div>
-
-            <table style="width:100%; border-collapse:collapse; background:rgba(255,255,255,0.65); font-size:11px; margin-bottom:8px;">
-                <thead>
-                    <tr style="background:#f9a8d4;">
-                        <th style="border:1px solid #9d174d; padding:3px;">Sl. No.</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">No. of Birds</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">Weight Kg</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">Sl. No.</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">No. of Birds</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">Weight Kg</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">Sl. No.</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">No. of Birds</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">Weight Kg</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">Sl. No.</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">No. of Birds</th>
-                        <th style="border:1px solid #9d174d; padding:3px;">Weight Kg</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${gridRowsHtml}
-                    ${colTotalRowHtml}
-                </tbody>
+            <table style="width:100%; border-collapse:collapse; margin-bottom:8px;">
+                <tbody>${gridRowsHtml}</tbody>
             </table>
-
-            <div style="display:grid; grid-template-columns:1.1fr 1fr; gap:10px; align-items:end; border-top:1.5px solid #9d174d; padding-top:8px;">
-                <div style="font-weight:800; font-size:13px; line-height:1.7;">
-                    <div>Total Birds: ${s.totalPcs || 0} Pcs</div>
-                    <div>Total Weight: ${Number(s.totalWeightKg || 0).toFixed(2)} Kg</div>
-                    <div>Avg. Body Weight: ${Number(s.avgBodyWeightKg || 0).toFixed(3)} Kg</div>
-                </div>
-                <div style="font-size:11.5px; line-height:1.7; text-align:right;">
-                    <div><b>Feed Closing Stock:</b> ${s.feedClosingStock || ''}</div>
-                    <div><b>Bird Stock:</b> ${s.birdStock || ''}</div>
-                    <div><b>Weak Birds:</b> ${s.weakBirds || ''}</div>
-                </div>
+            <div>
+                <b>Total Birds:</b> ${s.totalPcs || 0} | <b>Total Weight:</b> ${Number(s.totalWeightKg || 0).toFixed(2)} Kg | <b>Avg Weight:</b> ${Number(s.avgBodyWeightKg || 0).toFixed(3)} Kg
             </div>
         </div>
     `;
@@ -1111,8 +1016,185 @@ function openSalePrintSheet(id) {
     const titleEl = document.getElementById('ledgerModalTitle');
     const bodyEl = document.getElementById('ledgerModalBody');
     if (titleEl) titleEl.textContent = `Bird Lifting Sheet — Sl. No. ${s.slNo || ''}`;
-    if (bodyEl) {
-        bodyEl.innerHTML = printArea.innerHTML;
-    }
+    if (bodyEl) bodyEl.innerHTML = html;
     if (modal) modal.style.display = 'flex';
+}
+
+// =========================================================
+// REPORTS
+// =========================================================
+async function loadBranchReport() {
+    const tbody = document.getElementById('branchReportBody');
+    if (!tbody) return;
+    const branchId = document.getElementById('reportBranchSelect')?.value || '';
+    const url = branchId ? `/api/reports/branch?branchId=${encodeURIComponent(branchId)}` : '/api/reports/branch';
+    try {
+        const res = await apiFetch(url);
+        const rows = res.ok ? extractList(await res.json(), ['report', 'branches']) : [];
+        tbody.innerHTML = rows.length ? rows.map(r => `
+            <tr>
+                <td>${r.branchName || r.name || '-'}</td>
+                <td>${r.farmerCount ?? r.farmers ?? 0}</td>
+                <td>${r.liveChicks ?? 0}</td>
+                <td>${Number(r.closingFeedKg ?? r.closingFeed ?? 0).toFixed(2)} KG</td>
+            </tr>
+        `).join('') : '<tr><td colspan="4" style="text-align:center;">Koi report data nahi mila.</td></tr>';
+    } catch (_) {}
+}
+
+async function loadSupervisorReport() {
+    const tbody = document.getElementById('supervisorReportBody');
+    if (!tbody) return;
+    const supId = document.getElementById('reportSupSelect')?.value || '';
+    const url = supId ? `/api/reports/supervisor?supervisorId=${encodeURIComponent(supId)}` : '/api/reports/supervisor';
+    try {
+        const res = await apiFetch(url);
+        const rows = res.ok ? extractList(await res.json(), ['report', 'supervisors']) : [];
+        tbody.innerHTML = rows.length ? rows.map(r => `
+            <tr>
+                <td>${r.supervisorName || r.fullName || '-'}</td>
+                <td>${r.branchName || '-'}</td>
+                <td>${r.farmerCount ?? r.farmers ?? 0}</td>
+                <td>${r.liveChicks ?? 0}</td>
+            </tr>
+        `).join('') : '<tr><td colspan="4" style="text-align:center;">Koi report data nahi mila.</td></tr>';
+    } catch (_) {}
+}
+
+async function loadFarmerReport() {
+    const tbody = document.getElementById('farmerReportBody');
+    if (!tbody) return;
+    try {
+        const res = await apiFetch('/api/reports/farmer');
+        const rows = res.ok ? extractList(await res.json(), ['report', 'farmers']) : [];
+        tbody.innerHTML = rows.length ? rows.map(r => `
+            <tr>
+                <td>${r.farmerName || '-'}</td>
+                <td>${r.branchName || '-'}</td>
+                <td>${r.liveChicks ?? 0}</td>
+                <td>${r.avgBodyWeightGram ?? r.avgBw ?? 0} g</td>
+                <td>${Number(r.closingFeedKg ?? r.closingFeed ?? 0).toFixed(2)} KG</td>
+                <td>${r.fcr ?? 0}</td>
+            </tr>
+        `).join('') : '<tr><td colspan="6" style="text-align:center;">Koi report data nahi mila.</td></tr>';
+    } catch (_) {}
+}
+
+// =========================================================
+// FORM SUBMIT BINDINGS
+// =========================================================
+function bindFormHandlers() {
+    const bindPost = (formId, msgId, getUrl, buildBody, onSuccess) => {
+        const form = document.getElementById(formId);
+        if (!form || form.dataset.bound) return;
+        form.dataset.bound = 'true';
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msgEl = document.getElementById(msgId);
+            try {
+                if (msgEl) { msgEl.style.color = '#0f172a'; msgEl.textContent = 'Saving...'; }
+                const res = await apiFetch(getUrl(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(buildBody())
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || 'Save fail hua');
+                if (msgEl) { msgEl.style.color = '#059669'; msgEl.textContent = data.message || 'Saved successfully!'; }
+                form.reset();
+                setDefaultDates();
+                if (typeof onSuccess === 'function') onSuccess();
+            } catch (err) {
+                if (msgEl) { msgEl.style.color = '#dc2626'; msgEl.textContent = err.message; }
+            }
+        });
+    };
+
+    bindPost('branchForm', 'branchMsg', () => '/api/master/branch', () => ({
+        branchId: document.getElementById('branchId')?.value?.trim(),
+        branchName: document.getElementById('branchName')?.value?.trim(),
+        address: document.getElementById('branchAddress')?.value?.trim()
+    }), loadDropdownData);
+
+    bindPost('userForm', 'userMsg', () => '/api/master/user', () => ({
+        userId: document.getElementById('uId')?.value?.trim(),
+        fullName: document.getElementById('uName')?.value?.trim(),
+        password: document.getElementById('uPass')?.value,
+        role: document.getElementById('uRole')?.value,
+        branch: document.getElementById('uBranch')?.value || undefined,
+        mobileNumber: document.getElementById('uMobile')?.value?.trim()
+    }), loadDropdownData);
+
+    bindPost('farmerForm', 'farmerMsg', () => '/api/master/farmer', () => ({
+        supervisor: document.getElementById('fSup')?.value,
+        branch: document.getElementById('fBranch')?.value,
+        farmerName: document.getElementById('fName')?.value?.trim(),
+        farmerId: document.getElementById('fId')?.value?.trim(),
+        mobileNo: document.getElementById('fMobile')?.value?.trim(),
+        address: document.getElementById('fAddress')?.value?.trim(),
+        bankName: document.getElementById('fBank')?.value?.trim(),
+        accountNo: document.getElementById('fAcc')?.value?.trim(),
+        ifscCode: document.getElementById('fIfsc')?.value?.trim()
+    }), loadDropdownData);
+
+    bindPost('traderForm', 'traderMsg', () => '/api/master/trader', () => ({
+        traderId: document.getElementById('tId')?.value?.trim(),
+        traderName: document.getElementById('tName')?.value?.trim(),
+        mobileNo: document.getElementById('tMobile')?.value?.trim(),
+        address: document.getElementById('tAddress')?.value?.trim()
+    }), loadDropdownData);
+
+    bindPost('itemForm', 'itemMsg', () => '/api/master/item', () => ({
+        itemId: document.getElementById('itemId')?.value?.trim(),
+        itemName: document.getElementById('itemName')?.value?.trim(),
+        category: document.getElementById('itemCategory')?.value?.trim(),
+        unit: document.getElementById('itemUnit')?.value?.trim()
+    }), loadDropdownData);
+
+    bindPost('chicksForm', 'cpMsg', () => '/api/entry/chicks-placement', () => ({
+        date: document.getElementById('cDate')?.value,
+        farmer: document.getElementById('cFarmer')?.value,
+        chicksQty: Number(document.getElementById('cQty')?.value || 0)
+    }), loadEntriesData);
+
+    bindPost('feedForm', 'fdMsg', () => '/api/entry/feed-dispatch', () => ({
+        date: document.getElementById('feedDate')?.value,
+        farmer: document.getElementById('feedFarmer')?.value,
+        feedType: document.getElementById('feedType')?.value,
+        qtyKg: Number(document.getElementById('qtyKg')?.value || 0)
+    }), loadEntriesData);
+
+    bindPost('dailyLogForm', 'dlMsg', () => '/api/entry/daily-entry', () => ({
+        date: document.getElementById('dailyDate')?.value,
+        farmer: document.getElementById('dailyFarmer')?.value,
+        dayMortality: Number(document.getElementById('dayMortality')?.value || 0),
+        dayFeedConsumeKg: Number(document.getElementById('dayFeedConsumeKg')?.value || 0),
+        avgBodyWeightGram: Number(document.getElementById('avgBodyWeightGram')?.value || 0)
+    }), loadEntriesData);
+
+    bindPost('saleEntryForm', 'saleMsg', () => '/api/sale', () => ({
+        slNo: document.getElementById('saleSlNo')?.value?.trim(),
+        date: document.getElementById('saleDate')?.value,
+        liftingSupervisor: document.getElementById('saleSupervisor')?.value || undefined,
+        trader: document.getElementById('saleTrader')?.value || undefined,
+        farmer: document.getElementById('saleFarmer')?.value || undefined,
+        branchName: document.getElementById('saleBranch')?.value?.trim(),
+        wtStartingTime: document.getElementById('wtStartTime')?.value,
+        wtClosingTime: document.getElementById('wtCloseTime')?.value,
+        driverName: document.getElementById('saleDriver')?.value?.trim(),
+        vehicleNo: document.getElementById('saleVehicle')?.value?.trim(),
+        rate: Number(document.getElementById('saleRate')?.value || 0),
+        age: Number(document.getElementById('saleAge')?.value || 0),
+        lsName: document.getElementById('saleLsName')?.value?.trim(),
+        feedClosingStock: document.getElementById('saleFeedClosing')?.value?.trim(),
+        birdStock: document.getElementById('saleBirdStock')?.value?.trim(),
+        weakBirds: document.getElementById('saleWeakBirds')?.value?.trim(),
+        totalPcs: Number(document.getElementById('saleTotalPcs')?.value || 0),
+        totalWeightKg: Number(document.getElementById('saleTotalWeight')?.value || 0),
+        avgBodyWeightKg: Number(document.getElementById('saleAvgBodyWeight')?.value || 0),
+        rows: collectLiftingRows()
+    }), () => {
+        resetSaleForm();
+        loadSaleEntries();
+    });
 }

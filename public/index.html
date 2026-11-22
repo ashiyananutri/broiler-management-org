@@ -3,18 +3,21 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Broiler Management System - Ashiyana Nutrition</title>
+    <title>Broiler Management System — Ashiyana Nutrition</title>
     <style>
         :root {
-            --bg-body: #f3f5f9;
+            --bg-main: #f4f6f9;
             --bg-card: #ffffff;
+            --sidebar-bg: #162436;
+            --sidebar-hover: #223854;
+            --sidebar-active: #1f6feb;
             --primary: #1b4f72;
-            --primary-dark: #12364f;
-            --accent: #1e8449;
+            --primary-dark: #103249;
+            --success: #1e8449;
             --danger: #c0392b;
-            --text-main: #1f2937;
-            --text-muted: #5f6c7b;
-            --border: #d5dce4;
+            --text: #1e293b;
+            --muted: #64748b;
+            --border: #cbd5e1;
         }
 
         * {
@@ -25,74 +28,153 @@
 
         body {
             font-family: "Segoe UI", Roboto, Arial, sans-serif;
-            background: var(--bg-body);
-            color: var(--text-main);
-            line-height: 1.45;
+            background: var(--bg-main);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
         }
 
-        /* Top Header & Navigation */
-        header.top-bar {
-            background: var(--primary);
+        /* Sidebar */
+        aside.sidebar {
+            width: 245px;
+            background: var(--sidebar-bg);
             color: #fff;
-            padding: 12px 18px;
+            flex-shrink: 0;
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 200;
+            transition: transform 0.25s ease;
+        }
+
+        .sidebar-brand {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .sidebar-brand h1 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .sidebar-brand span {
+            font-size: 0.76rem;
+            color: #94a3b8;
+        }
+
+        .menu-list {
+            list-style: none;
+            padding: 10px 0;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .menu-btn {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            padding: 11px 18px;
+            text-align: left;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .menu-btn:hover {
+            background: var(--sidebar-hover);
+            color: #fff;
+        }
+
+        .menu-btn.active {
+            background: var(--sidebar-active);
+            color: #fff;
+        }
+
+        .sub-menu {
+            list-style: none;
+            background: rgba(0, 0, 0, 0.18);
+            display: none;
+        }
+
+        .sub-menu.open {
+            display: block;
+        }
+
+        .sub-btn {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            padding: 9px 18px 9px 32px;
+            text-align: left;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .sub-btn:hover,
+        .sub-btn.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+            font-weight: 600;
+        }
+
+        /* Main Area */
+        .main-wrapper {
+            flex: 1;
+            margin-left: 245px;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        header.topbar {
+            background: #fff;
+            border-bottom: 1px solid var(--border);
+            padding: 10px 18px;
+            display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
         }
 
-        .brand-title {
-            font-size: 1.15rem;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-        }
-
-        .brand-sub {
-            font-size: 0.78rem;
-            opacity: 0.9;
-        }
-
-        nav.nav-tabs {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .nav-btn {
-            background: rgba(255, 255, 255, 0.14);
+        .mobile-toggle {
+            display: none;
+            background: var(--primary);
             color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            padding: 7px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.88rem;
+            border: none;
+            padding: 7px 12px;
+            border-radius: 5px;
+            font-size: 0.9rem;
             font-weight: 600;
-            transition: background 0.2s ease;
+            cursor: pointer;
         }
 
-        .nav-btn:hover,
-        .nav-btn.active {
-            background: #fff;
+        .page-title {
+            font-size: 1.05rem;
+            font-weight: 700;
             color: var(--primary-dark);
         }
 
-        /* Container & Cards */
-        main.container {
-            max-width: 1280px;
-            margin: 18px auto;
-            padding: 0 14px 36px;
+        main.content {
+            padding: 18px;
         }
 
-        .section-panel {
+        .page-section {
             display: none;
         }
 
-        .section-panel.active {
+        .page-section.active {
             display: block;
         }
 
@@ -101,118 +183,86 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 16px;
-            margin-bottom: 18px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
 
-        .card-header {
+        .card-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
             display: flex;
-            flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 14px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #eaedf2;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
-        .card-header h2,
-        .card-header h3 {
-            color: var(--primary-dark);
-            font-size: 1.05rem;
-        }
-
-        /* Forms & Controls */
-        .form-grid {
+        .grid-form {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
             gap: 12px;
         }
 
-        .form-group {
+        .field {
             display: flex;
             flex-direction: column;
             gap: 4px;
         }
 
-        .form-group label {
-            font-size: 0.82rem;
+        .field label {
+            font-size: 0.8rem;
             font-weight: 600;
-            color: var(--text-muted);
+            color: var(--muted);
         }
 
         input,
         select,
         textarea {
-            width: 100%;
             padding: 8px 10px;
             border: 1px solid var(--border);
             border-radius: 5px;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             background: #fff;
-            color: var(--text-main);
-        }
-
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: var(--primary);
+            color: var(--text);
+            width: 100%;
         }
 
         .btn {
             padding: 8px 14px;
             border: none;
             border-radius: 5px;
-            font-size: 0.88rem;
+            font-size: 0.86rem;
             font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            justify-content: center;
             gap: 6px;
         }
 
-        .btn-primary {
-            background: var(--primary);
-            color: #fff;
-        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-secondary { background: #e2e8f0; color: var(--text); }
 
-        .btn-primary:hover {
-            background: var(--primary-dark);
-        }
-
-        .btn-success {
-            background: var(--accent);
-            color: #fff;
-        }
-
-        .btn-danger {
-            background: var(--danger);
-            color: #fff;
-        }
-
-        .btn-secondary {
-            background: #e5e9f0;
-            color: var(--text-main);
-        }
-
-        .btn-row {
+        .btn-group {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 14px;
+            gap: 8px;
+            margin-top: 12px;
         }
 
-        /* Summary Strip */
-        .stats-bar {
+        .kpi-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
             gap: 12px;
-            margin: 14px 0;
+            margin: 12px 0;
         }
 
-        .stat-box {
+        .kpi-card {
             background: #f8fafc;
             border: 1px solid var(--border);
             border-left: 4px solid var(--primary);
@@ -220,513 +270,720 @@
             padding: 10px 12px;
         }
 
-        .stat-box .label {
-            font-size: 0.78rem;
-            color: var(--text-muted);
+        .kpi-card .k-label {
+            font-size: 0.76rem;
+            color: var(--muted);
         }
 
-        .stat-box .value {
-            font-size: 1.12rem;
+        .kpi-card .k-val {
+            font-size: 1.1rem;
             font-weight: 700;
             color: var(--primary-dark);
             margin-top: 2px;
         }
 
-        /* 48 Serial Rows (4 Columns) Grid */
-        .lifting-4col-grid {
+        /* 48 Serials in 4 Columns */
+        .rows-4col {
             display: grid;
-            grid-template-columns: repeat(4, minmax(220px, 1fr));
+            grid-template-columns: repeat(4, minmax(210px, 1fr));
             gap: 10px;
             margin-top: 12px;
         }
 
-        @media (max-width: 960px) {
-            .lifting-4col-grid {
-                grid-template-columns: repeat(2, minmax(200px, 1fr));
-            }
-        }
-
-        @media (max-width: 560px) {
-            .lifting-4col-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .lifting-col-table {
+        .serial-tbl {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.82rem;
+            font-size: 0.8rem;
         }
 
-        .lifting-col-table th,
-        .lifting-col-table td {
+        .serial-tbl th,
+        .serial-tbl td {
             border: 1px solid var(--border);
-            padding: 4px 6px;
+            padding: 4px 5px;
             text-align: center;
         }
 
-        .lifting-col-table th {
-            background: #eef2f7;
+        .serial-tbl th {
+            background: #eef2f6;
             color: var(--primary-dark);
         }
 
-        .lifting-col-table input {
-            padding: 4px 6px;
-            font-size: 0.82rem;
+        .serial-tbl input {
+            padding: 3px 5px;
+            font-size: 0.8rem;
             text-align: right;
         }
 
-        /* General Tables */
-        .table-wrap {
+        .table-responsive {
             overflow-x: auto;
             margin-top: 10px;
         }
 
-        table.data-table {
+        table.tbl {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.86rem;
+            font-size: 0.84rem;
         }
 
-        table.data-table th,
-        table.data-table td {
+        table.tbl th,
+        table.tbl td {
             border: 1px solid var(--border);
-            padding: 8px 10px;
+            padding: 7px 9px;
             text-align: left;
         }
 
-        table.data-table th {
-            background: #eef2f7;
+        table.tbl th {
+            background: #eef2f6;
             color: var(--primary-dark);
             font-weight: 700;
         }
 
-        /* Printable Slip Layout */
-        .print-slip {
+        /* Ashiyana Nutrition Printable Slip */
+        .slip-box {
             background: #fff;
-            border: 2px solid #111;
-            padding: 16px;
-            margin-top: 18px;
+            border: 2px solid #000;
+            padding: 14px;
+            margin-top: 14px;
             color: #000;
         }
 
-        .slip-header {
+        .slip-top {
             text-align: center;
-            border-bottom: 2px solid #111;
-            padding-bottom: 8px;
-            margin-bottom: 10px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
         }
 
-        .slip-header h3 {
-            font-size: 1.2rem;
-            text-transform: uppercase;
-        }
-
-        .slip-meta {
+        .slip-info {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-            gap: 6px 14px;
-            font-size: 0.85rem;
-            margin-bottom: 10px;
+            gap: 5px 12px;
+            font-size: 0.82rem;
+            margin-bottom: 8px;
         }
 
-        .slip-footer-grid {
+        .slip-summary {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 10px;
-            margin-top: 12px;
-            font-size: 0.85rem;
+            grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 0.84rem;
         }
 
-        .sign-row {
+        .slip-signs {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 14px;
-            margin-top: 34px;
+            gap: 12px;
+            margin-top: 32px;
             text-align: center;
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 600;
         }
 
-        .sign-box {
-            border-top: 1px solid #111;
-            padding-top: 4px;
+        .slip-signs div {
+            border-top: 1px solid #000;
+            padding-top: 3px;
+        }
+
+        /* Ledger Modal */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            z-index: 400;
+            align-items: center;
+            justify-content: center;
+            padding: 14px;
+        }
+
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal-box {
+            background: #fff;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 1040px;
+            max-height: 88vh;
+            overflow-y: auto;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        @media (max-width: 960px) {
+            .rows-4col {
+                grid-template-columns: repeat(2, minmax(180px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            aside.sidebar {
+                transform: translateX(-100%);
+            }
+            aside.sidebar.open {
+                transform: translateX(0);
+            }
+            .main-wrapper {
+                margin-left: 0;
+            }
+            .mobile-toggle {
+                display: inline-flex;
+            }
+            .rows-4col {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media print {
-            header.top-bar,
-            .no-print {
+            aside.sidebar,
+            header.topbar,
+            .no-print,
+            .modal-backdrop {
                 display: none !important;
             }
-            body {
-                background: #fff;
+            .main-wrapper {
+                margin-left: 0;
             }
-            main.container {
-                max-width: 100%;
-                margin: 0;
+            main.content {
                 padding: 0;
             }
-            .print-slip {
-                border: 1px solid #000;
+            .slip-box {
                 margin-top: 0;
             }
         }
     </style>
 </head>
 <body>
-    <header class="top-bar">
-        <div>
-            <div class="brand-title">Broiler Management System</div>
-            <div class="brand-sub">Ashiyana Nutrition | Operations, Lifting &amp; Reports</div>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <h1>Broiler ERP</h1>
+            <span>Ashiyana Nutrition</span>
         </div>
-        <nav class="nav-tabs" id="mainNav">
-            <button type="button" class="nav-btn active" data-tab="saleTab" onclick="switchSection('saleTab', this)">Sale / Bird Lifting</button>
-            <button type="button" class="nav-btn" data-tab="transactionsTab" onclick="switchSection('transactionsTab', this)">Transactions &amp; Feed Transfer</button>
-            <button type="button" class="nav-btn" data-tab="reportsTab" onclick="switchSection('reportsTab', this)">Reports &amp; Farmer Book</button>
-            <button type="button" class="nav-btn" data-tab="masterTab" onclick="switchSection('masterTab', this)">Master Setup</button>
-        </nav>
-    </header>
+        <ul class="menu-list">
+            <li>
+                <button type="button" class="menu-btn active" data-page="dashboardPage" onclick="openPage('dashboardPage', this, 'Dashboard')">
+                    <span>Dashboard</span>
+                </button>
+            </li>
+            <li>
+                <button type="button" class="menu-btn" data-page="masterPage" onclick="openPage('masterPage', this, 'Master Data')">
+                    <span>Master</span>
+                </button>
+            </li>
+            <li>
+                <button type="button" class="menu-btn" onclick="toggleSubMenu('txSubMenu')">
+                    <span>Transactions</span>
+                    <span>▾</span>
+                </button>
+                <ul class="sub-menu open" id="txSubMenu">
+                    <li>
+                        <button type="button" class="sub-btn active" data-page="txFeedDispatchPage" onclick="openPage('txFeedDispatchPage', this, 'Transactions — Feed Dispatch')">
+                            Feed Dispatch
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" class="sub-btn" data-page="txDailyEntryPage" onclick="openPage('txDailyEntryPage', this, 'Transactions — Daily Entry')">
+                            Daily Entry
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" class="sub-btn" data-page="txFeedTransferPage" onclick="openPage('txFeedTransferPage', this, 'Transactions — Feed Transfer')">
+                            Feed Transfer
+                        </button>
+                    </li>
+                    <li>
+                        <button type="button" class="sub-btn" data-page="txBirdLiftingPage" onclick="openPage('txBirdLiftingPage', this, 'Transactions — Sale / Bird Lifting')">
+                            Sale / Bird Lifting
+                        </button>
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <button type="button" class="menu-btn" data-page="reportsPage" onclick="openPage('reportsPage', this, 'Reports & Farmer Ledger')">
+                    <span>Reports</span>
+                </button>
+            </li>
+        </ul>
+    </aside>
 
-    <main class="container">
-        <!-- 1. SALE / BIRD LIFTING ENTRY SECTION -->
-        <section id="saleTab" class="section-panel active">
-            <div class="card no-print">
-                <div class="card-header">
-                    <h2>Sale / Bird Lifting Entry (48 Serial Rows)</h2>
-                    <div class="btn-row" style="margin-top:0;">
-                        <button type="button" class="btn btn-secondary" onclick="clearSaleForm()">New Entry</button>
-                        <button type="button" class="btn btn-primary" onclick="window.print()">Print Slip</button>
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <button type="button" class="mobile-toggle" onclick="toggleSidebar()">☰ Menu</button>
+                <div class="page-title" id="topPageTitle">Dashboard</div>
+            </div>
+            <div style="font-size:0.82rem;color:var(--muted);" id="liveDateText"></div>
+        </header>
+
+        <main class="content">
+            <!-- DASHBOARD -->
+            <section id="dashboardPage" class="page-section active">
+                <div class="card">
+                    <div class="card-title">Operations Overview</div>
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="k-label">Total Farmers</div>
+                            <div class="k-val" id="dashFarmersCount">0</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="k-label">Live Chicks</div>
+                            <div class="k-val" id="dashLiveChicks">0</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="k-label">Total Lifted Pcs</div>
+                            <div class="k-val" id="dashLiftedPcs">0</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="k-label">Feed Transfers</div>
+                            <div class="k-val" id="dashTransferCount">0</div>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-primary" onclick="openPage('txFeedTransferPage', null, 'Transactions — Feed Transfer')">Open Feed Transfer</button>
+                        <button type="button" class="btn btn-success" onclick="openPage('txBirdLiftingPage', null, 'Transactions — Sale / Bird Lifting')">Open Bird Lifting Slip</button>
+                        <button type="button" class="btn btn-secondary" onclick="openPage('reportsPage', null, 'Reports & Farmer Ledger')">View Farmer Reports</button>
                     </div>
                 </div>
+            </section>
 
-                <form id="saleEntryForm">
-                    <input type="hidden" id="saleEditId" value="" />
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="saleSlNo">Slip / Serial No</label>
-                            <input type="text" id="saleSlNo" placeholder="Auto or Manual" />
+            <!-- MASTER -->
+            <section id="masterPage" class="page-section">
+                <div class="card">
+                    <div class="card-title">Master Records</div>
+                    <p style="font-size:0.88rem;color:var(--muted);">
+                        Branches, Farmers, Supervisors aur Traders ka data <code>/api/master</code> se load hota hai aur dropdowns mein human-readable naam ke saath dikhta hai.
+                    </p>
+                </div>
+            </section>
+
+            <!-- TRANSACTIONS 1: FEED DISPATCH -->
+            <section id="txFeedDispatchPage" class="page-section">
+                <div class="card">
+                    <div class="card-title">Feed Dispatch Entry</div>
+                    <form id="feedDispatchForm" class="grid-form">
+                        <div class="field">
+                            <label for="fdDate">Date</label>
+                            <input type="date" id="fdDate" required />
                         </div>
-                        <div class="form-group">
-                            <label for="saleDate">Date</label>
-                            <input type="date" id="saleDate" required />
-                        </div>
-                        <div class="form-group">
-                            <label for="saleSupervisor">Lifting Supervisor</label>
-                            <select id="saleSupervisor">
-                                <option value="">-- Select Supervisor --</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="saleTrader">Party / Trader Name</label>
-                            <select id="saleTrader">
-                                <option value="">-- Select Trader --</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="saleFarmer">Farmer Name</label>
-                            <select id="saleFarmer" required>
+                        <div class="field">
+                            <label for="fdFarmer">Farmer</label>
+                            <select id="fdFarmer" required>
                                 <option value="">-- Select Farmer --</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="saleRate">Rate (₹ / Kg)</label>
-                            <input type="number" id="saleRate" step="0.01" min="0" placeholder="0.00" />
+                        <div class="field">
+                            <label for="fdFeedType">Feed Type</label>
+                            <input type="text" id="fdFeedType" value="Broiler Feed" />
                         </div>
-                        <div class="form-group">
-                            <label for="saleAge">Bird Age (Days)</label>
-                            <input type="number" id="saleAge" min="0" placeholder="e.g. 38" />
+                        <div class="field">
+                            <label for="fdQtyKg">Quantity (KG)</label>
+                            <input type="number" id="fdQtyKg" step="0.01" min="0.01" required />
                         </div>
-                        <div class="form-group">
-                            <label for="saleLsName">LS Name</label>
-                            <input type="text" id="saleLsName" placeholder="Line Supervisor Name" />
+                        <div class="field">
+                            <label for="fdRemarks">Remarks</label>
+                            <input type="text" id="fdRemarks" placeholder="Challan / note" />
                         </div>
-                        <div class="form-group">
-                            <label for="saleWtStart">Weight Starting Time</label>
-                            <input type="time" id="saleWtStart" />
+                    </form>
+                    <div class="btn-group">
+                        <button type="submit" form="feedDispatchForm" class="btn btn-primary">Save Dispatch</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TRANSACTIONS 2: DAILY ENTRY -->
+            <section id="txDailyEntryPage" class="page-section">
+                <div class="card">
+                    <div class="card-title">Daily Flock Entry</div>
+                    <form id="dailyEntryForm" class="grid-form">
+                        <div class="field">
+                            <label for="deDate">Date</label>
+                            <input type="date" id="deDate" required />
                         </div>
-                        <div class="form-group">
-                            <label for="saleWtClose">Weight Closing Time</label>
-                            <input type="time" id="saleWtClose" />
+                        <div class="field">
+                            <label for="deFarmer">Farmer</label>
+                            <select id="deFarmer" required>
+                                <option value="">-- Select Farmer --</option>
+                            </select>
                         </div>
-                        <div class="form-group">
-                            <label for="saleDriver">Driver Name</label>
-                            <input type="text" id="saleDriver" placeholder="Driver Name" />
+                        <div class="field">
+                            <label for="deMortality">Mortality (Pcs)</label>
+                            <input type="number" id="deMortality" min="0" value="0" />
                         </div>
-                        <div class="form-group">
-                            <label for="saleVehicle">Vehicle No</label>
-                            <input type="text" id="saleVehicle" placeholder="e.g. JH15..." />
+                        <div class="field">
+                            <label for="deFeedConsume">Feed Consumed (KG)</label>
+                            <input type="number" id="deFeedConsume" step="0.01" min="0" value="0" />
+                        </div>
+                        <div class="field">
+                            <label for="deAvgBodyWeight">Avg. Body Weight (g)</label>
+                            <input type="number" id="deAvgBodyWeight" min="0" value="0" />
+                        </div>
+                    </form>
+                    <div class="btn-group">
+                        <button type="submit" form="dailyEntryForm" class="btn btn-success">Save Daily Entry</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TRANSACTIONS 3: FEED TRANSFER (FARMER TO FARMER) -->
+            <section id="txFeedTransferPage" class="page-section">
+                <div id="feedTransferSection" class="card">
+                    <div class="card-title">
+                        <span>Feed Transfer (Farmer to Farmer)</span>
+                    </div>
+                    <form id="feedTransferForm" class="grid-form" style="margin-bottom: 14px;">
+                        <div class="field">
+                            <label for="ftDate">Date</label>
+                            <input type="date" id="ftDate" required />
+                        </div>
+                        <div class="field">
+                            <label for="ftFromFarmer">From Farmer</label>
+                            <select id="ftFromFarmer" required>
+                                <option value="">-- Select From Farmer --</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="ftToFarmer">To Farmer</label>
+                            <select id="ftToFarmer" required>
+                                <option value="">-- Select To Farmer --</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="ftFeedType">Feed Type</label>
+                            <input type="text" id="ftFeedType" value="Broiler Feed" />
+                        </div>
+                        <div class="field">
+                            <label for="ftQtyKg">Quantity (KG)</label>
+                            <input type="number" id="ftQtyKg" step="0.01" min="0.01" placeholder="e.g. 50" required />
+                        </div>
+                        <div class="field">
+                            <label for="ftRemarks">Remarks</label>
+                            <input type="text" id="ftRemarks" placeholder="Optional note" />
+                        </div>
+                        <div class="field" style="justify-content: flex-end;">
+                            <button type="submit" id="ftSubmitBtn" class="btn btn-primary">Transfer Feed</button>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="tbl">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Transfer No</th>
+                                    <th>From Farmer</th>
+                                    <th>To Farmer</th>
+                                    <th>Feed Type</th>
+                                    <th>Qty (KG)</th>
+                                    <th>Remarks</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="feedTransferTableBody">
+                                <tr><td colspan="8" style="text-align:center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TRANSACTIONS 4: SALE / BIRD LIFTING ENTRY (48 ROWS + ASHIYANA NUTRITION SLIP) -->
+            <section id="txBirdLiftingPage" class="page-section">
+                <div class="card no-print">
+                    <div class="card-title">
+                        <span>Sale / Bird Lifting Entry (48 Serial Rows)</span>
+                        <div style="display:flex;gap:8px;">
+                            <button type="button" class="btn btn-secondary" onclick="clearSaleForm()">Reset</button>
+                            <button type="button" class="btn btn-primary" onclick="window.print()">Print Slip</button>
                         </div>
                     </div>
 
-                    <div class="stats-bar">
-                        <div class="stat-box">
-                            <div class="label">Total Lifted Pcs</div>
-                            <div class="value" id="calcTotalPcs">0</div>
+                    <form id="saleEntryForm">
+                        <input type="hidden" id="saleEditId" value="" />
+                        <div class="grid-form">
+                            <div class="field">
+                                <label for="saleSlNo">Slip / Serial No</label>
+                                <input type="text" id="saleSlNo" placeholder="Auto / Manual" />
+                            </div>
+                            <div class="field">
+                                <label for="saleDate">Date</label>
+                                <input type="date" id="saleDate" required />
+                            </div>
+                            <div class="field">
+                                <label for="saleSupervisor">Lifting Supervisor</label>
+                                <select id="saleSupervisor">
+                                    <option value="">-- Select Supervisor --</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="saleTrader">Party / Trader</label>
+                                <select id="saleTrader">
+                                    <option value="">-- Select Trader --</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="saleFarmer">Farmer</label>
+                                <select id="saleFarmer" required>
+                                    <option value="">-- Select Farmer --</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="saleRate">Rate (₹/Kg)</label>
+                                <input type="number" id="saleRate" step="0.01" min="0" value="0" />
+                            </div>
+                            <div class="field">
+                                <label for="saleAge">Age (Days)</label>
+                                <input type="number" id="saleAge" min="0" value="0" />
+                            </div>
+                            <div class="field">
+                                <label for="saleLsName">LS Name</label>
+                                <input type="text" id="saleLsName" placeholder="Line Supervisor" />
+                            </div>
+                            <div class="field">
+                                <label for="saleWtStart">Weight Start Time</label>
+                                <input type="time" id="saleWtStart" />
+                            </div>
+                            <div class="field">
+                                <label for="saleWtClose">Weight Close Time</label>
+                                <input type="time" id="saleWtClose" />
+                            </div>
+                            <div class="field">
+                                <label for="saleDriver">Driver Name</label>
+                                <input type="text" id="saleDriver" />
+                            </div>
+                            <div class="field">
+                                <label for="saleVehicle">Vehicle No</label>
+                                <input type="text" id="saleVehicle" />
+                            </div>
                         </div>
-                        <div class="stat-box">
-                            <div class="label">Total Lifted Weight (Kg)</div>
-                            <div class="value" id="calcTotalWeight">0.00</div>
+
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <div class="k-label">Total Pcs</div>
+                                <div class="k-val" id="calcTotalPcs">0</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="k-label">Total Weight (Kg)</div>
+                                <div class="k-val" id="calcTotalWeight">0.00</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="k-label">Avg. Body Weight (Kg)</div>
+                                <div class="k-val" id="calcAvgBodyWeight">0.000</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="k-label">Total Amount (₹)</div>
+                                <div class="k-val" id="calcAmount">0.00</div>
+                            </div>
                         </div>
-                        <div class="stat-box">
-                            <div class="label">Avg. Body Weight (Kg)</div>
-                            <div class="value" id="calcAvgBodyWeight">0.000</div>
+
+                        <div id="liftingRowsContainer" class="rows-4col"></div>
+
+                        <div class="grid-form" style="margin-top: 12px;">
+                            <div class="field">
+                                <label for="saleFeedClosing">Feed Closing Stock</label>
+                                <input type="text" id="saleFeedClosing" />
+                            </div>
+                            <div class="field">
+                                <label for="saleBirdStock">Remaining Bird Stock</label>
+                                <input type="text" id="saleBirdStock" />
+                            </div>
+                            <div class="field">
+                                <label for="saleWeakBirds">Weak / Cull Birds</label>
+                                <input type="text" id="saleWeakBirds" />
+                            </div>
                         </div>
-                        <div class="stat-box">
-                            <div class="label">Estimated Amount (₹)</div>
-                            <div class="value" id="calcAmount">0.00</div>
+
+                        <div class="btn-group">
+                            <button type="submit" class="btn btn-success">Save Lifting Entry</button>
+                            <button type="button" class="btn btn-primary" onclick="window.print()">Print Lifting Slip</button>
                         </div>
+                    </form>
+                </div>
+
+                <!-- Printable Slip -->
+                <div class="slip-box" id="printableLiftingSlip">
+                    <div class="slip-top">
+                        <h3>Ashiyana Nutrition</h3>
+                        <div style="font-size:0.85rem;">Bird Lifting / Weightment Slip</div>
+                    </div>
+                    <div class="slip-info">
+                        <div><strong>Slip No:</strong> <span id="slipSlNo">-</span></div>
+                        <div><strong>Date:</strong> <span id="slipDate">-</span></div>
+                        <div><strong>Farmer:</strong> <span id="slipFarmer">-</span></div>
+                        <div><strong>Party / Trader:</strong> <span id="slipTrader">-</span></div>
+                        <div><strong>Supervisor:</strong> <span id="slipSupervisor">-</span></div>
+                        <div><strong>Rate:</strong> ₹<span id="slipRate">0.00</span> | <strong>Age:</strong> <span id="slipAge">0</span>d</div>
+                        <div><strong>Time:</strong> <span id="slipWtStart">-</span> to <span id="slipWtClose">-</span></div>
+                        <div><strong>Driver / Vehicle:</strong> <span id="slipDriverVehicle">-</span></div>
                     </div>
 
-                    <!-- 4 Columns x 12 Rows = 48 Lifting Serials -->
-                    <div id="liftingRowsContainer" class="lifting-4col-grid"></div>
+                    <div id="slipRowsGrid" class="rows-4col"></div>
 
-                    <div class="form-grid" style="margin-top: 14px;">
-                        <div class="form-group">
-                            <label for="saleFeedClosing">Feed Closing Stock</label>
-                            <input type="text" id="saleFeedClosing" placeholder="Closing feed stock" />
-                        </div>
-                        <div class="form-group">
-                            <label for="saleBirdStock">Remaining Bird Stock</label>
-                            <input type="text" id="saleBirdStock" placeholder="Remaining birds" />
-                        </div>
-                        <div class="form-group">
-                            <label for="saleWeakBirds">Weak / Cull Birds</label>
-                            <input type="text" id="saleWeakBirds" placeholder="Weak birds details" />
-                        </div>
+                    <div class="slip-summary">
+                        <div><strong>Total Pcs:</strong> <span id="slipTotalPcs">0</span></div>
+                        <div><strong>Total Wt (Kg):</strong> <span id="slipTotalWeight">0.00</span></div>
+                        <div><strong>Avg. Body Wt (Kg):</strong> <span id="slipAvgWeight">0.000</span></div>
+                        <div><strong>Feed Closing:</strong> <span id="slipFeedClosing">-</span></div>
+                        <div><strong>Bird Stock:</strong> <span id="slipBirdStock">-</span></div>
+                        <div><strong>Weak Birds:</strong> <span id="slipWeakBirds">-</span></div>
                     </div>
 
-                    <div class="btn-row">
-                        <button type="submit" class="btn btn-success">Save Lifting Entry</button>
-                        <button type="button" class="btn btn-primary" onclick="window.print()">Print Lifting Slip</button>
+                    <div class="slip-signs">
+                        <div>Farmer Sign</div>
+                        <div>Trader Sign</div>
+                        <div>Supervisor Sign</div>
+                        <div>Authorized Sign</div>
                     </div>
-                </form>
+                </div>
+
+                <div class="card no-print" style="margin-top:16px;">
+                    <div class="card-title">
+                        <span>Saved Bird Lifting Entries</span>
+                        <button type="button" class="btn btn-secondary" onclick="loadSaleEntries()">Refresh</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="tbl">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Slip No</th>
+                                    <th>Farmer</th>
+                                    <th>Trader</th>
+                                    <th>Total Pcs</th>
+                                    <th>Total Wt (Kg)</th>
+                                    <th>Avg BW (Kg)</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="saleEntriesTableBody">
+                                <tr><td colspan="8" style="text-align:center;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- REPORTS -->
+            <section id="reportsPage" class="page-section">
+                <div class="card">
+                    <div class="card-title">
+                        <span>Farmer-wise Summary &amp; FCR Report</span>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <select id="reportBranchFilter" style="width:auto;min-width:170px;" onchange="loadFarmerReport()">
+                                <option value="">All Branches</option>
+                            </select>
+                            <button type="button" class="btn btn-primary" onclick="loadFarmerReport()">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="tbl">
+                            <thead>
+                                <tr>
+                                    <th>Farmer</th>
+                                    <th>Branch</th>
+                                    <th>Supervisor</th>
+                                    <th>Age</th>
+                                    <th>Placement</th>
+                                    <th>Mortality</th>
+                                    <th>Lifted Pcs</th>
+                                    <th>Live Chicks</th>
+                                    <th>Avg BW (g)</th>
+                                    <th>Total BW (Kg)</th>
+                                    <th>Feed In</th>
+                                    <th>Total Feed</th>
+                                    <th>Closing Feed</th>
+                                    <th>FCR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="farmerReportTableBody">
+                                <tr><td colspan="14" style="text-align:center;">Loading report...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Farmer Ledger Modal -->
+    <div class="modal-backdrop" id="farmerLedgerModal">
+        <div class="modal-box">
+            <div class="card-title">
+                <span id="ledgerModalTitle">Farmer Ledger</span>
+                <button type="button" class="btn btn-secondary" onclick="closeFarmerLedgerModal()">Close ✕</button>
             </div>
-
-            <!-- Printable Invoice / Lifting Slip Preview -->
-            <div class="card print-slip" id="printableLiftingSlip">
-                <div class="slip-header">
-                    <h3>Ashiyana Nutrition</h3>
-                    <div>Bird Lifting / Weightment Slip</div>
-                </div>
-                <div class="slip-meta">
-                    <div><strong>Slip No:</strong> <span id="slipSlNo">-</span></div>
-                    <div><strong>Date:</strong> <span id="slipDate">-</span></div>
-                    <div><strong>Farmer:</strong> <span id="slipFarmer">-</span></div>
-                    <div><strong>Party / Trader:</strong> <span id="slipTrader">-</span></div>
-                    <div><strong>Supervisor:</strong> <span id="slipSupervisor">-</span></div>
-                    <div><strong>Rate:</strong> ₹<span id="slipRate">0.00</span> | <strong>Age:</strong> <span id="slipAge">0</span> Days</div>
-                    <div><strong>Start Time:</strong> <span id="slipWtStart">-</span> | <strong>Close Time:</strong> <span id="slipWtClose">-</span></div>
-                    <div><strong>Driver / Vehicle:</strong> <span id="slipDriverVehicle">-</span></div>
-                </div>
-
-                <div id="slipRowsGrid" class="lifting-4col-grid"></div>
-
-                <div class="slip-footer-grid">
-                    <div><strong>Total Pcs:</strong> <span id="slipTotalPcs">0</span></div>
-                    <div><strong>Total Weight (Kg):</strong> <span id="slipTotalWeight">0.00</span></div>
-                    <div><strong>Avg. Body Weight (Kg):</strong> <span id="slipAvgWeight">0.000</span></div>
-                    <div><strong>Feed Closing:</strong> <span id="slipFeedClosing">-</span></div>
-                    <div><strong>Bird Stock:</strong> <span id="slipBirdStock">-</span></div>
-                    <div><strong>Weak Birds:</strong> <span id="slipWeakBirds">-</span></div>
-                </div>
-
-                <div class="sign-row">
-                    <div class="sign-box">Farmer Signature</div>
-                    <div class="sign-box">Party / Trader Signature</div>
-                    <div class="sign-box">Lifting Supervisor</div>
-                    <div class="sign-box">Authorized Signatory</div>
-                </div>
+            <div id="ledgerFarmerMeta" style="margin-bottom:10px;font-size:0.88rem;"></div>
+            <div class="table-responsive">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Age</th>
+                            <th>Day Mort</th>
+                            <th>Total Mort</th>
+                            <th>Lifted Pcs</th>
+                            <th>Live Chicks</th>
+                            <th>Avg BW (g)</th>
+                            <th>Total BW (Kg)</th>
+                            <th>Total Feed</th>
+                            <th>Closing Feed</th>
+                            <th>FCR</th>
+                        </tr>
+                    </thead>
+                    <tbody id="farmerLedgerTableBody"></tbody>
+                </table>
             </div>
-
-            <!-- Saved Lifting Entries List -->
-            <div class="card no-print">
-                <div class="card-header">
-                    <h3>Saved Bird Lifting Entries</h3>
-                    <button type="button" class="btn btn-secondary" onclick="loadSaleEntries()">Refresh</button>
-                </div>
-                <div class="table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Slip No</th>
-                                <th>Farmer</th>
-                                <th>Party / Trader</th>
-                                <th>Total Pcs</th>
-                                <th>Total Wt (Kg)</th>
-                                <th>Avg BW (Kg)</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="saleEntriesTableBody">
-                            <tr><td colspan="8" style="text-align:center;">Loading entries...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- 2. TRANSACTIONS & FEED TRANSFER SECTION -->
-        <section id="transactionsTab" class="section-panel">
-            <div id="feedTransferSection" class="card">
-                <div class="card-header">
-                    <h3>Feed Transfer (Farmer to Farmer)</h3>
-                </div>
-                <form id="feedTransferForm" class="form-grid" style="margin-bottom: 16px;">
-                    <div class="form-group">
-                        <label for="ftDate">Date</label>
-                        <input type="date" id="ftDate" required />
-                    </div>
-                    <div class="form-group">
-                        <label for="ftFromFarmer">From Farmer</label>
-                        <select id="ftFromFarmer" required>
-                            <option value="">-- Select From Farmer --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="ftToFarmer">To Farmer</label>
-                        <select id="ftToFarmer" required>
-                            <option value="">-- Select To Farmer --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="ftFeedType">Feed Type</label>
-                        <input type="text" id="ftFeedType" value="Broiler Feed" />
-                    </div>
-                    <div class="form-group">
-                        <label for="ftQtyKg">Quantity (KG)</label>
-                        <input type="number" id="ftQtyKg" step="0.01" min="0.01" placeholder="e.g. 50" required />
-                    </div>
-                    <div class="form-group">
-                        <label for="ftRemarks">Remarks</label>
-                        <input type="text" id="ftRemarks" placeholder="Optional note" />
-                    </div>
-                    <div class="form-group" style="justify-content: flex-end;">
-                        <button type="submit" id="ftSubmitBtn" class="btn btn-primary">Transfer Feed</button>
-                    </div>
-                </form>
-
-                <div class="table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Transfer No</th>
-                                <th>From Farmer</th>
-                                <th>To Farmer</th>
-                                <th>Feed Type</th>
-                                <th>Qty (KG)</th>
-                                <th>Remarks</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="feedTransferTableBody">
-                            <tr><td colspan="8" style="text-align: center;">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- 3. REPORTS & FARMER BOOK SECTION -->
-        <section id="reportsTab" class="section-panel">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Farmer-wise Performance &amp; Lifting Report</h3>
-                    <div class="btn-row" style="margin-top:0;">
-                        <select id="reportBranchFilter" onchange="loadFarmerReport()">
-                            <option value="">All Branches</option>
-                        </select>
-                        <button type="button" class="btn btn-primary" onclick="loadFarmerReport()">Refresh Report</button>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Farmer</th>
-                                <th>Branch</th>
-                                <th>Supervisor</th>
-                                <th>Age</th>
-                                <th>Placement</th>
-                                <th>Mortality</th>
-                                <th>Lifted Pcs</th>
-                                <th>Live Chicks</th>
-                                <th>Avg BW (g)</th>
-                                <th>Total BW (Kg)</th>
-                                <th>Feed In</th>
-                                <th>Total Feed</th>
-                                <th>Closing Feed</th>
-                                <th>FCR</th>
-                            </tr>
-                        </thead>
-                        <tbody id="farmerReportTableBody">
-                            <tr><td colspan="14" style="text-align:center;">Click Refresh Report to load data.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="card" id="farmerLedgerCard" style="display:none;">
-                <div class="card-header">
-                    <h3 id="ledgerModalTitle">Farmer Ledger History</h3>
-                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('farmerLedgerCard').style.display='none'">Close Ledger</button>
-                </div>
-                <div id="ledgerFarmerMeta" style="margin-bottom: 10px; font-size: 0.9rem;"></div>
-                <div class="table-wrap">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Age</th>
-                                <th>Day Mort</th>
-                                <th>Total Mort</th>
-                                <th>Lifted Pcs</th>
-                                <th>Live Chicks</th>
-                                <th>Avg BW (g)</th>
-                                <th>Total BW (Kg)</th>
-                                <th>Total Feed</th>
-                                <th>Closing Feed</th>
-                                <th>FCR</th>
-                            </tr>
-                        </thead>
-                        <tbody id="farmerLedgerTableBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- 4. MASTER SETUP SECTION -->
-        <section id="masterTab" class="section-panel">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Master Setup (Branches, Farmers, Traders)</h3>
-                </div>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">
-                    Use Master APIs (<code>/api/master</code>) or your master module in <code>public/app.js</code> to manage branches, farmers, supervisors, and traders.
-                </p>
-            </div>
-        </section>
-    </main>
+        </div>
+    </div>
 
     <script>
-        function switchSection(tabId, btnEl) {
-            document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        function toggleSidebar() {
+            document.getElementById('sidebar')?.classList.toggle('open');
+        }
 
-            const target = document.getElementById(tabId);
+        function toggleSubMenu(id) {
+            document.getElementById(id)?.classList.toggle('open');
+        }
+
+        function openPage(pageId, btnEl, titleText) {
+            document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
+            const target = document.getElementById(pageId);
             if (target) target.classList.add('active');
-            if (btnEl) btnEl.classList.add('active');
 
-            if (tabId === 'transactionsTab' && typeof initFeedTransfer === 'function') {
+            document.querySelectorAll('.menu-btn, .sub-btn').forEach(b => b.classList.remove('active'));
+            if (btnEl) {
+                btnEl.classList.add('active');
+            } else {
+                const matched = document.querySelector(`[data-page="${pageId}"]`);
+                if (matched) matched.classList.add('active');
+            }
+
+            if (titleText) {
+                const titleEl = document.getElementById('topPageTitle');
+                if (titleEl) titleEl.textContent = titleText;
+            }
+
+            if (window.innerWidth <= 768) {
+                document.getElementById('sidebar')?.classList.remove('open');
+            }
+
+            if (pageId === 'txFeedTransferPage' && typeof initFeedTransfer === 'function') {
                 initFeedTransfer();
             }
-            if (tabId === 'reportsTab' && typeof loadFarmerReport === 'function') {
+            if (pageId === 'txBirdLiftingPage' && typeof loadSaleEntries === 'function') {
+                loadSaleEntries();
+            }
+            if (pageId === 'reportsPage' && typeof loadFarmerReport === 'function') {
                 loadFarmerReport();
+            }
+            if (pageId === 'dashboardPage' && typeof refreshDashboardStats === 'function') {
+                refreshDashboardStats();
             }
         }
 
-        // Build 48 serial rows across 4 columns (1..12, 13..24, 25..36, 37..48)
         function render48LiftingInputs() {
             const container = document.getElementById('liftingRowsContainer');
             if (!container) return;
@@ -734,13 +991,9 @@
             let html = '';
             for (let col = 0; col < 4; col++) {
                 html += `
-                    <table class="lifting-col-table">
+                    <table class="serial-tbl">
                         <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Pcs</th>
-                                <th>Wt (Kg)</th>
-                            </tr>
+                            <tr><th>#</th><th>Pcs</th><th>Wt (Kg)</th></tr>
                         </thead>
                         <tbody>
                 `;
@@ -754,7 +1007,7 @@
                         </tr>
                     `;
                 }
-                html += `</tbody></table>`;
+                html += '</tbody></table>';
             }
             container.innerHTML = html;
             renderSlipRowsGrid();
@@ -767,13 +1020,9 @@
             let html = '';
             for (let col = 0; col < 4; col++) {
                 html += `
-                    <table class="lifting-col-table">
+                    <table class="serial-tbl">
                         <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Pcs</th>
-                                <th>Wt (Kg)</th>
-                            </tr>
+                            <tr><th>#</th><th>Pcs</th><th>Wt (Kg)</th></tr>
                         </thead>
                         <tbody>
                 `;
@@ -781,15 +1030,9 @@
                     const sl = col * 12 + r + 1;
                     const pcsVal = document.querySelector(`.lift-pcs[data-sl="${sl}"]`)?.value || '';
                     const wtVal = document.querySelector(`.lift-wt[data-sl="${sl}"]`)?.value || '';
-                    html += `
-                        <tr>
-                            <td>${sl}</td>
-                            <td>${pcsVal}</td>
-                            <td>${wtVal}</td>
-                        </tr>
-                    `;
+                    html += `<tr><td>${sl}</td><td>${pcsVal}</td><td>${wtVal}</td></tr>`;
                 }
-                html += `</tbody></table>`;
+                html += '</tbody></table>';
             }
             slipGrid.innerHTML = html;
         }
@@ -849,10 +1092,22 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            const dateText = document.getElementById('liveDateText');
+            if (dateText) {
+                dateText.textContent = new Date().toLocaleDateString('en-IN', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric'
+                });
+            }
+
             render48LiftingInputs();
             const today = new Date().toISOString().split('T')[0];
-            const saleDateEl = document.getElementById('saleDate');
-            if (saleDateEl && !saleDateEl.value) saleDateEl.value = today;
+            ['saleDate', 'ftDate', 'fdDate', 'deDate'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el.value) el.value = today;
+            });
 
             document.querySelectorAll('#saleEntryForm input, #saleEntryForm select').forEach(el => {
                 el.addEventListener('change', () => recalcLiftingTotals());
@@ -866,10 +1121,6 @@
                     }
                 });
             });
-
-            if (typeof initFeedTransfer === 'function') {
-                initFeedTransfer();
-            }
         });
     </script>
     <script src="/app.js"></script>

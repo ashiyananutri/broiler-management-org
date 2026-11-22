@@ -1,239 +1,210 @@
 const express = require('express');
 const router = express.Router();
-const DailyEntry = require('../models/DailyEntry');
-const Farmer = require('../models/Farmer');
-const Branch = require('../models/Branch');
-const User = require('../models/User');
-const FeedDispatch = require('../models/FeedDispatch');
-const SaleEntry = require('../models/SaleEntry');
+const mongoose = require('mongoose');
 
-// Helper: Farmer ka Total Feed In (Dispatched KG) nikalne ke liye
-async function getTotalFeedInKg(farmerId) {
-    const dispatches = await FeedDispatch.find({ farmer: farmerId });
-    const totalIn = dispatches.reduce((sum, item) => sum + Number(item.qtyKg || 0), 0);
-    return Number(totalIn.toFixed(2));
-}
+let Farmer, Branch, User, ChicksPlacement, FeedDispatch, FeedTransfer, DailyEntry, SaleEntry;
 
-// Helper: Closing Feed (Feed In - Feed Consume) nikalne ke liye
-function getClosingFeedKg(totalFeedInKg, totalFeedConsumeKg) {
-    const inKg = Number(totalFeedInKg || 0);
-    const consumeKg = Number(totalFeedConsumeKg || 0);
-    return Number((inKg - consumeKg).toFixed(2));
-}
+try { Farmer = require('../models/Farmer'); } catch (_) {}
+try { Branch = require('../models/Branch'); } catch (_) {}
+try { User = require('../models/User'); } catch (_) {}
+try { ChicksPlacement = require('../models/ChicksPlacement'); } catch (_) {}
+try { FeedDispatch = require('../models/FeedDispatch'); } catch (_) {}
+try { FeedTransfer = require('../models/FeedTransfer'); } catch (_) {}
+try { DailyEntry = require('../models/DailyEntry'); } catch (_) {}
+try { SaleEntry = require('../models/SaleEntry'); } catch (_) {}
 
-// Helper: Farmer ki Sale / Lifting totals aur latest lifted Avg BW nikalne ke liye
-async function getFarmerSaleSummary(farmerId) {
-    const sales = await SaleEntry.find({ farmer: farmerId }).sort({ date: 1, createdAt: 1 });
-    let totalLiftedPcs = 0;
-    let totalLiftedWeightKg = 0;
-    let latestLiftedAvgGram = 0;
-
-    for (const s of sales) {
-        const pcs = Number(s.totalPcs || 0);
-        const wt = Number(s.totalWeightKg || 0);
-        totalLiftedPcs += pcs;
-        totalLiftedWeightKg += wt;
-        if (pcs > 0 && wt > 0) {
-            latestLiftedAvgGram = Number(((wt / pcs) * 1000).toFixed(0));
-        }
+function safeModel(model) {
+    if (model) return model;
+    for (const name of Object.keys(mongoose.models)) {
+        if (mongoose.models[name]) return mongoose.models[name];
     }
-
-    totalLiftedWeightKg = Number(totalLiftedWeightKg.toFixed(2));
-    const overallLiftedAvgGram = totalLiftedPcs > 0
-        ? Number(((totalLiftedWeightKg / totalLiftedPcs) * 1000).toFixed(0))
-        : latestLiftedAvgGram;
-
-    return {
-        sales,
-        totalLiftedPcs,
-        totalLiftedWeightKg,
-        liftedAvgBodyWeightGram: overallLiftedAvgGram
-    };
+    return null;
 }
 
-// Helper: Summary row build karna (branch-wise, supervisor-wise, farmer-wise ke liye)
-async function buildFarmerSummaryRow(f) {
-    const lastEntry = await DailyEntry.findOne({ farmer: f._id }).sort({ date: -1 });
-    const totalFeedInKg = await getTotalFeedInKg(f._id);
-    const totalFeedConsumeKg = lastEntry ? Number(lastEntry.totalFeedConsumeKg || 0) : 0;
-    const closingFeedKg = getClosingFeedKg(totalFeedInKg, totalFeedConsumeKg);
+async function buildFarmerMetrics() {
+    const FarmerModel = Farmer || safeModel('Farmer');
+    if (!FarmerModel) return [];
 
-    const {
-        totalLiftedPcs,
-        totalLiftedWeightKg,
-        liftedAvgBodyWeightGram
-    } = await getFarmerSaleSummary(f._id);
+    const PlacementModel = ChicksPlacement || safeModel('ChicksPlacement');
+    const FeedModel = FeedDispatch || safeModel('FeedDispatch');
+    const TransferModel = FeedTransfer || safeModel('FeedTransfer');
+    const DailyModel = DailyEntry || safeModel('DailyEntry');
+    const SaleModel = SaleEntry || safeModel('SaleEntry');
 
-    const basePlacement = lastEntry ? Number(lastEntry.totalPlacementChicks || 0) : 0;
-    const baseMortality = lastEntry ? Number(lastEntry.totalMortality || 0) : 0;
-    const rawLiveChicks = lastEntry
-        ? Number(lastEntry.currentLiveChicks || Math.max(0, basePlacement - baseMortality))
-        : 0;
+    const [farmers, placements, feeds, transfers, dailies, sales] = await Promise.all([
+        FarmerModel.find().populate('branch').populate('supervisor').lean().catch(() => []),
+        PlacementModel ? PlacementModel.find().lean().catch(() => []) : [],
+        FeedModel ? FeedModel.find().lean().catch(() => []) : [],
+        TransferModel ? TransferModel.find().lean().catch(() => []) : [],
+        DailyModel ? DailyModel.find().sort({ date: -1, createdAt: -1 }).lean().catch(() => []) : [],
+        SaleModel ? SaleModel.find().lean().catch(() => []) : []
+    ]);
 
-    // Lifting ke baad live chicks minus
-    const currentLiveChicks = Math.max(0, rawLiveChicks - totalLiftedPcs);
+    return farmers.map((f) => {
+        const fIdStr = String(f._id);
 
-    // Lifting hui hai toh lifted avg body weight update hoga, warna last entry ka avg weight
-    const avgBodyWeightGram = totalLiftedPcs > 0 && liftedAvgBodyWeightGram > 0
-        ? liftedAvgBodyWeightGram
-        : (lastEntry ? Number(lastEntry.avgBodyWeightGram || 0) : 0);
+        const placedChicks = placements
+            .filter(p => String(p.farmer?._id || p.farmer) === fIdStr)
+            .reduce((s, p) => s + Number(p.chicksQty || 0), 0);
 
-    // Total Body Weight: lifted weight + bache live chicks ka weight
-    const remainingLiveWeightKg = (currentLiveChicks * avgBodyWeightGram) / 1000;
-    const totalBodyWeightKg = totalLiftedWeightKg > 0
-        ? Number((totalLiftedWeightKg + remainingLiveWeightKg).toFixed(2))
-        : (lastEntry ? Number(lastEntry.totalBodyWeightKg || 0) : 0);
+        const feedDispatched = feeds
+            .filter(fd => String(fd.farmer?._id || fd.farmer) === fIdStr)
+            .reduce((s, fd) => s + Number(fd.qtyKg || 0), 0);
 
-    // FCR recalculate: Total Feed Consume / Total Body Weight
-    const fcr = totalBodyWeightKg > 0
-        ? Number((totalFeedConsumeKg / totalBodyWeightKg).toFixed(2))
-        : (lastEntry ? Number(lastEntry.fcr || 0) : 0);
+        const feedTransferIn = transfers
+            .filter(tr => String(tr.toFarmer?._id || tr.toFarmer) === fIdStr)
+            .reduce((s, tr) => s + Number(tr.qtyKg || 0), 0);
 
-    return {
-        farmerMongoId: f._id,
-        farmerName: f.farmerName,
-        farmerId: f.farmerId,
-        branchName: f.branch ? f.branch.branchName : 'N/A',
-        supervisorName: f.supervisor ? f.supervisor.fullName : 'N/A',
-        age: lastEntry ? lastEntry.days : 0,
-        totalPlacementChicks: basePlacement,
-        totalMortality: baseMortality,
-        mortalityPercentage: lastEntry ? lastEntry.mortalityPercentage : 0,
-        totalLiftedPcs,
-        totalLiftedWeightKg,
-        currentLiveChicks,
-        avgBodyWeightGram,
-        totalBodyWeightKg,
-        totalFeedInKg,
-        totalFeedConsumeKg,
-        closingFeedKg,
-        fcr
-    };
+        const feedTransferOut = transfers
+            .filter(tr => String(tr.fromFarmer?._id || tr.fromFarmer) === fIdStr)
+            .reduce((s, tr) => s + Number(tr.qtyKg || 0), 0);
+
+        const totalFeedInKg = Number((feedDispatched + feedTransferIn - feedTransferOut).toFixed(2));
+
+        const farmerDailies = dailies.filter(d => String(d.farmer?._id || d.farmer) === fIdStr);
+        const latestDaily = farmerDailies[0] || null;
+
+        const totalMortality = farmerDailies.length
+            ? farmerDailies.reduce((s, d) => s + Number(d.dayMortality || 0), 0)
+            : Number(latestDaily?.totalMortality || 0);
+
+        const liftedBirds = sales
+            .filter(sl => String(sl.farmer?._id || sl.farmer) === fIdStr)
+            .reduce((s, sl) => s + Number(sl.totalPcs || 0), 0);
+
+        const totalPlacementChicks = placedChicks || Number(latestDaily?.totalPlacementChicks || 0);
+        const liveChicks = Math.max(0, totalPlacementChicks - totalMortality - liftedBirds);
+
+        const totalFeedConsumed = farmerDailies.length
+            ? farmerDailies.reduce((s, d) => s + Number(d.dayFeedConsumeKg || 0), 0)
+            : Number(latestDaily?.totalFeedConsumeKg || 0);
+
+        const closingFeedKg = Number((totalFeedInKg - totalFeedConsumed).toFixed(2));
+        const avgBodyWeightGram = Number(latestDaily?.avgBodyWeightGram || 0);
+        const totalBodyWeightKg = Number(((liveChicks * avgBodyWeightGram) / 1000).toFixed(2));
+        const fcr = totalBodyWeightKg > 0 ? Number((totalFeedConsumed / totalBodyWeightKg).toFixed(2)) : 0;
+
+        const branchObj = f.branch && typeof f.branch === 'object' ? f.branch : null;
+        const supObj = f.supervisor && typeof f.supervisor === 'object' ? f.supervisor : null;
+
+        return {
+            farmerId: f._id,
+            farmerCode: f.farmerId || '',
+            farmerName: f.farmerName || f.name || 'Farmer',
+            branchId: branchObj?._id ? String(branchObj._id) : String(f.branch || ''),
+            branchName: branchObj?.branchName || 'N/A',
+            supervisorId: supObj?._id ? String(supObj._id) : String(f.supervisor || ''),
+            supervisorName: supObj?.fullName || supObj?.name || 'N/A',
+            liveChicks,
+            avgBodyWeightGram,
+            closingFeedKg,
+            fcr
+        };
+    });
 }
 
-// 1. Branch Wise Report (With Feed In, Total Feed Consume, Closing Feed & Sale Effect)
-router.get('/branch-wise', async (req, res) => {
+// Branch-wise report
+router.get('/branch', async (req, res) => {
     try {
         const { branchId } = req.query;
-        let farmerQuery = {};
-        if (branchId) farmerQuery.branch = branchId;
+        const BranchModel = Branch || safeModel('Branch');
+        const [branches, metrics] = await Promise.all([
+            BranchModel ? BranchModel.find().lean().catch(() => []) : [],
+            buildFarmerMetrics()
+        ]);
 
-        const farmers = await Farmer.find(farmerQuery).populate('branch').populate('supervisor');
-        const report = [];
-
-        for (let f of farmers) {
-            report.push(await buildFarmerSummaryRow(f));
+        const map = new Map();
+        for (const b of branches) {
+            map.set(String(b._id), {
+                branchId: String(b._id),
+                branchName: b.branchName || 'Branch',
+                farmerCount: 0,
+                liveChicks: 0,
+                closingFeedKg: 0
+            });
         }
-        res.json(report);
+
+        for (const m of metrics) {
+            const key = m.branchId || 'unassigned';
+            if (!map.has(key)) {
+                map.set(key, {
+                    branchId: key,
+                    branchName: m.branchName || 'N/A',
+                    farmerCount: 0,
+                    liveChicks: 0,
+                    closingFeedKg: 0
+                });
+            }
+            const row = map.get(key);
+            row.farmerCount += 1;
+            row.liveChicks += Number(m.liveChicks || 0);
+            row.closingFeedKg = Number((row.closingFeedKg + Number(m.closingFeedKg || 0)).toFixed(2));
+        }
+
+        let list = Array.from(map.values());
+        if (branchId) {
+            list = list.filter(r => String(r.branchId) === String(branchId));
+        }
+
+        res.json({ report: list });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 2. Supervisor Wise Report (With Feed In, Total Feed Consume, Closing Feed & Sale Effect)
-router.get('/supervisor-wise', async (req, res) => {
+// Supervisor-wise report
+router.get('/supervisor', async (req, res) => {
     try {
         const { supervisorId } = req.query;
-        let farmerQuery = {};
-        if (supervisorId) farmerQuery.supervisor = supervisorId;
+        const UserModel = User || safeModel('User');
+        const [users, metrics] = await Promise.all([
+            UserModel ? UserModel.find({ role: /supervisor/i }).populate('branch').lean().catch(() => []) : [],
+            buildFarmerMetrics()
+        ]);
 
-        const farmers = await Farmer.find(farmerQuery).populate('branch').populate('supervisor');
-        const report = [];
-
-        for (let f of farmers) {
-            report.push(await buildFarmerSummaryRow(f));
+        const map = new Map();
+        for (const u of users) {
+            map.set(String(u._id), {
+                supervisorId: String(u._id),
+                supervisorName: u.fullName || u.userId || 'Supervisor',
+                branchName: u.branch?.branchName || 'N/A',
+                farmerCount: 0,
+                liveChicks: 0
+            });
         }
-        res.json(report);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-// 3. Farmer Wise Summary Report
-router.get('/farmer-wise', async (req, res) => {
-    try {
-        const farmers = await Farmer.find().populate('branch').populate('supervisor');
-        const report = [];
-
-        for (let f of farmers) {
-            report.push(await buildFarmerSummaryRow(f));
-        }
-        res.json(report);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// 4. Specific Farmer Ledger / Detailed History API (With Sale / Lifting Subtraction, Avg BW & FCR)
-router.get('/farmer-ledger/:farmerId', async (req, res) => {
-    try {
-        const { farmerId } = req.params;
-        const farmer = await Farmer.findById(farmerId).populate('branch').populate('supervisor');
-        const rawEntries = await DailyEntry.find({ farmer: farmerId }).sort({ date: 1 });
-        const totalFeedInKg = await getTotalFeedInKg(farmerId);
-        const { sales } = await getFarmerSaleSummary(farmerId);
-
-        let cumulativeLiftedPcs = 0;
-        let cumulativeLiftedWeightKg = 0;
-        let latestLiftedAvgGram = 0;
-        const appliedSaleIds = new Set();
-
-        const entries = rawEntries.map((entry) => {
-            const obj = entry.toObject();
-            const consumed = Number(obj.totalFeedConsumeKg || 0);
-            const entryDate = new Date(obj.date);
-            const entryDayEnd = new Date(
-                entryDate.getFullYear(),
-                entryDate.getMonth(),
-                entryDate.getDate(),
-                23, 59, 59, 999
-            );
-
-            for (const s of sales) {
-                if (appliedSaleIds.has(String(s._id))) continue;
-                const sDate = new Date(s.date);
-                if (sDate <= entryDayEnd) {
-                    const pcs = Number(s.totalPcs || 0);
-                    const wt = Number(s.totalWeightKg || 0);
-                    cumulativeLiftedPcs += pcs;
-                    cumulativeLiftedWeightKg += wt;
-                    if (pcs > 0 && wt > 0) {
-                        latestLiftedAvgGram = Number(((wt / pcs) * 1000).toFixed(0));
-                    }
-                    appliedSaleIds.add(String(s._id));
-                }
+        for (const m of metrics) {
+            if (!m.supervisorId || m.supervisorId === 'undefined') continue;
+            if (!map.has(m.supervisorId)) {
+                map.set(m.supervisorId, {
+                    supervisorId: m.supervisorId,
+                    supervisorName: m.supervisorName || 'Supervisor',
+                    branchName: m.branchName || 'N/A',
+                    farmerCount: 0,
+                    liveChicks: 0
+                });
             }
+            const row = map.get(m.supervisorId);
+            row.farmerCount += 1;
+            row.liveChicks += Number(m.liveChicks || 0);
+        }
 
-            const rawLive = Number(obj.currentLiveChicks || 0);
-            const liveChicksAfterSale = Math.max(0, rawLive - cumulativeLiftedPcs);
+        let list = Array.from(map.values());
+        if (supervisorId) {
+            list = list.filter(r => String(r.supervisorId) === String(supervisorId));
+        }
 
-            const avgGram = cumulativeLiftedPcs > 0 && latestLiftedAvgGram > 0
-                ? latestLiftedAvgGram
-                : Number(obj.avgBodyWeightGram || 0);
+        res.json({ report: list });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-            const remainingLiveWtKg = (liveChicksAfterSale * avgGram) / 1000;
-            const totalWtKg = cumulativeLiftedWeightKg > 0
-                ? Number((cumulativeLiftedWeightKg + remainingLiveWtKg).toFixed(2))
-                : Number(obj.totalBodyWeightKg || 0);
-
-            const updatedFcr = totalWtKg > 0
-                ? Number((consumed / totalWtKg).toFixed(2))
-                : Number(obj.fcr || 0);
-
-            return {
-                ...obj,
-                liftedPcs: cumulativeLiftedPcs,
-                liftedWeightKg: Number(cumulativeLiftedWeightKg.toFixed(2)),
-                currentLiveChicks: liveChicksAfterSale,
-                avgBodyWeightGram: avgGram,
-                totalBodyWeightKg: totalWtKg,
-                fcr: updatedFcr,
-                totalFeedInKg,
-                closingFeedKg: getClosingFeedKg(totalFeedInKg, consumed)
-            };
-        });
-
-        res.json({ farmer, totalFeedInKg, entries });
+// Farmer-wise report
+router.get('/farmer', async (req, res) => {
+    try {
+        const list = await buildFarmerMetrics();
+        res.json({ report: list });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

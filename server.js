@@ -24,6 +24,14 @@ try {
     console.log('Optional route ./routes/auth not found, skipping...');
 }
 
+// Optional Feed Transfer Route (agar routes/feedTransfer.js मौजूद ho toh mount karega)
+try {
+    const feedTransferRoutes = require('./routes/feedTransfer');
+    app.use('/api/feed-transfer', feedTransferRoutes);
+} catch (err) {
+    console.log('Optional route ./routes/feedTransfer not found, skipping...');
+}
+
 // Mount API Routes
 app.use('/api/master', masterRoutes);
 app.use('/api/entry', entryRoutes);

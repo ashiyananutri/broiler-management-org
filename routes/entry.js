@@ -11,9 +11,34 @@ async function getFarmerPlacementQty(farmerId) {
     return placements.reduce((sum, p) => sum + Number(p.chicksQty || 0), 0);
 }
 
+// Helper: Farmer ke liye entry date ke hisaab se 'days' (Age) nikalne ke liye
+async function computeEntryDays(farmerId, entryDate) {
+    const placementDoc = await ChicksPlacement.findOne({ farmer: farmerId }).sort({ date: 1 });
+    if (placementDoc && placementDoc.date && entryDate) {
+        const pDate = new Date(placementDoc.date);
+        pDate.setHours(0, 0, 0, 0);
+        const eDate = new Date(entryDate);
+        eDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.floor((eDate - pDate) / (1000 * 60 * 60 * 24)) + 1;
+        if (diffDays > 0) return diffDays;
+    }
+
+    const existingCount = await DailyEntry.countDocuments({ farmer: farmerId });
+    return Math.max(1, existingCount + 1);
+}
+
 // Helper: Farmer ki saari daily entries ko date-wise recalculate karne ke liye
 async function recalculateFarmerDailyEntries(farmerId) {
+    const farmer = await Farmer.findById(farmerId).populate('branch').populate('supervisor');
+    const farmerBranchId = farmer && farmer.branch
+        ? (farmer.branch._id ? farmer.branch._id : farmer.branch)
+        : undefined;
+    const farmerSupervisorId = farmer && farmer.supervisor
+        ? (farmer.supervisor._id ? farmer.supervisor._id : farmer.supervisor)
+        : undefined;
+
     const totalPlacementChicks = await getFarmerPlacementQty(farmerId);
+    const placementDoc = await ChicksPlacement.findOne({ farmer: farmerId }).sort({ date: 1 });
     const entries = await DailyEntry.find({ farmer: farmerId }).sort({ date: 1, createdAt: 1 });
 
     let prevLiveChicks = totalPlacementChicks;
@@ -23,8 +48,6 @@ async function recalculateFarmerDailyEntries(farmerId) {
     for (let i = 0; i < entries.length; i++) {
         const entry = entries[i];
 
-        // Age / Days calculation (agar placement date hai toh usse, warna entry index/days)
-        const placementDoc = await ChicksPlacement.findOne({ farmer: farmerId }).sort({ date: 1 });
         let calculatedDays = entry.days || (i + 1);
         if (placementDoc && placementDoc.date && entry.date) {
             const pDate = new Date(placementDoc.date);
@@ -63,6 +86,13 @@ async function recalculateFarmerDailyEntries(farmerId) {
         const fcr = totalBodyWeightKg > 0
             ? Number((cumulativeFeedConsumeKg / totalBodyWeightKg).toFixed(2))
             : 0;
+
+        if (!entry.branch && farmerBranchId) {
+            entry.branch = farmerBranchId;
+        }
+        if (!entry.supervisor && farmerSupervisorId) {
+            entry.supervisor = farmerSupervisorId;
+        }
 
         entry.days = calculatedDays;
         entry.totalPlacementChicks = totalPlacementChicks;
@@ -259,7 +289,7 @@ router.delete('/feed-dispatch/:id', async (req, res) => {
 });
 
 // =========================================================
-// 3. DAILY FARM LOG ROUTES (Previous Live Bird + Day Feed + BW + FCR)
+// 3. DAILY FARM LOG ROUTES
 // =========================================================
 router.get('/daily-entry', async (req, res) => {
     try {
@@ -299,12 +329,25 @@ router.get('/daily-entry', async (req, res) => {
 router.post('/daily-entry', async (req, res) => {
     try {
         const { farmerId, date, dayMortality, dayFeedConsumeKg, avgBodyWeightGram } = req.body;
-        const farmer = await Farmer.findById(farmerId);
+        const farmer = await Farmer.findById(farmerId).populate('branch').populate('supervisor');
         if (!farmer) return res.status(404).json({ error: 'Farmer not found!' });
+
+        const branchId = farmer.branch && farmer.branch._id ? farmer.branch._id : farmer.branch;
+        if (!branchId) {
+            return res.status(400).json({ error: 'Is Farmer ki Branch set nahi hai. Pehle Farmer Master me Branch assign karein!' });
+        }
+
+        const supervisorId = farmer.supervisor && farmer.supervisor._id ? farmer.supervisor._id : farmer.supervisor;
+        const initialDays = await computeEntryDays(farmer._id, date);
+        const totalPlacementChicks = await getFarmerPlacementQty(farmer._id);
 
         const newEntry = new DailyEntry({
             farmer: farmer._id,
+            branch: branchId,
+            supervisor: supervisorId,
             date,
+            days: initialDays,
+            totalPlacementChicks,
             dayMortality: Number(dayMortality || 0),
             dayFeedConsumeKg: Number(dayFeedConsumeKg || 0),
             avgBodyWeightGram: avgBodyWeightGram !== undefined && avgBodyWeightGram !== null && avgBodyWeightGram !== ''
@@ -330,9 +373,25 @@ router.put('/daily-entry/:id', async (req, res) => {
 
         const oldFarmerId = existing.farmer;
         const targetFarmerId = farmerId || oldFarmerId;
+        const farmer = await Farmer.findById(targetFarmerId).populate('branch').populate('supervisor');
+        if (!farmer) return res.status(404).json({ error: 'Farmer not found!' });
+
+        const branchId = farmer.branch && farmer.branch._id
+            ? farmer.branch._id
+            : (farmer.branch || existing.branch);
+        if (!branchId) {
+            return res.status(400).json({ error: 'Is Farmer ki Branch set nahi hai!' });
+        }
+
+        const supervisorId = farmer.supervisor && farmer.supervisor._id
+            ? farmer.supervisor._id
+            : (farmer.supervisor || existing.supervisor);
 
         existing.farmer = targetFarmerId;
+        existing.branch = branchId;
+        existing.supervisor = supervisorId;
         existing.date = date;
+        existing.days = await computeEntryDays(targetFarmerId, date);
         existing.dayMortality = Number(dayMortality || 0);
         existing.dayFeedConsumeKg = Number(dayFeedConsumeKg || 0);
         existing.avgBodyWeightGram = avgBodyWeightGram !== undefined && avgBodyWeightGram !== null && avgBodyWeightGram !== ''

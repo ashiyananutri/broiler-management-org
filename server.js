@@ -7,7 +7,7 @@ const app = express();
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes Import
@@ -16,7 +16,7 @@ const entryRoutes = require('./routes/entry');
 const reportRoutes = require('./routes/report');
 const saleRoutes = require('./routes/sale');
 
-// Optional Auth Route (agar routes/auth.js मौजूद ho toh mount karega)
+// Optional Auth Route
 try {
     const authRoutes = require('./routes/auth');
     app.use('/api/auth', authRoutes);
@@ -24,7 +24,7 @@ try {
     console.log('Optional route ./routes/auth not found, skipping...');
 }
 
-// Optional Feed Transfer Route (agar routes/feedTransfer.js मौजूद ho toh mount karega)
+// Optional Feed Transfer Route
 try {
     const feedTransferRoutes = require('./routes/feedTransfer');
     app.use('/api/feed-transfer', feedTransferRoutes);
@@ -38,8 +38,16 @@ app.use('/api/entry', entryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/sale', saleRoutes);
 
+// Health check
+app.get('/api/health', (req, res) => {
+    res.json({ ok: true, dbState: mongoose.connection.readyState });
+});
+
 // SPA Fallback (Express 4 & Express 5 safe)
 app.use((req, res) => {
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'API endpoint not found' });
+    }
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

@@ -15,8 +15,9 @@ const masterRoutes = require('./routes/master');
 const entryRoutes = require('./routes/entry');
 const reportRoutes = require('./routes/report');
 const saleRoutes = require('./routes/sale');
+const feedTransferRoutes = require('./routes/feedTransfer');
 
-// Optional Auth Route (agar routes/auth.js मौजूद ho toh mount karega)
+// Optional Auth Route
 try {
     const authRoutes = require('./routes/auth');
     app.use('/api/auth', authRoutes);
@@ -29,6 +30,7 @@ app.use('/api/master', masterRoutes);
 app.use('/api/entry', entryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/sale', saleRoutes);
+app.use('/api/feed-transfer', feedTransferRoutes);
 
 // SPA Fallback (Express 4 & Express 5 safe)
 app.use((req, res) => {
@@ -47,8 +49,12 @@ const MONGO_URI =
     process.env.MONGO_URI ||
     process.env.MONGODB_URI ||
     process.env.DATABASE_URL ||
-    process.env.DB_URL ||
-    'mongodb+srv://ashiyanafeedtraders1_db_user:rishu123456@cluster0.qk1qbgl.mongodb.net/broiler_db?retryWrites=true&w=majority&compressors=zlib';
+    process.env.DB_URL;
+
+if (!MONGO_URI) {
+    console.error('Error: MONGO_URI / MONGODB_URI environment variable is not set!');
+    process.exit(1);
+}
 
 mongoose.connect(MONGO_URI)
     .then(() => {

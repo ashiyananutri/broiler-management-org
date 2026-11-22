@@ -1,11 +1,12 @@
 // =======================================================
-// Broiler Management System - public/app.js
+// Broiler Management System - public/app.js (Complete)
 // =======================================================
 
 let allSupervisors = [];
 let allBranches = [];
 let allFarmers = [];
 let allTraders = [];
+let allItems = [];
 let allFeedDispatches = [];
 let allSaleEntries = [];
 let currentUser = null;
@@ -359,14 +360,14 @@ async function loadDropdownData() {
 
         const itemRes = await apiFetch('/api/master/item');
         if (itemRes.ok) {
-            const items = extractList(await itemRes.json(), ['items']);
-            renderItemTable(items);
+            allItems = extractList(await itemRes.json(), ['items']);
+            renderItemTable(allItems);
 
             const feedTypeSelect = document.getElementById('feedType');
             if (feedTypeSelect) {
                 feedTypeSelect.innerHTML = '<option value="">-- Feed Type Chunein --</option>';
-                const feedItems = items.filter(i => i.category && i.category.toLowerCase() === 'feed');
-                (feedItems.length ? feedItems : items).forEach(item => {
+                const feedItems = allItems.filter(i => i.category && i.category.toLowerCase() === 'feed');
+                (feedItems.length ? feedItems : allItems).forEach(item => {
                     feedTypeSelect.innerHTML += `<option value="${item.itemName}">${item.itemName} (${item.itemId || ''})</option>`;
                 });
             }
@@ -449,7 +450,6 @@ function renderBranchTable(branches) {
         <tr>
             <td>${b.branchId || ''}</td><td>${b.branchName || ''}</td><td>${b.address || ''}</td>
             <td>
-                <button type="button" class="action-btn btn-edit" onclick="editBranch('${b._id}', '${b.branchId || ''}', '${b.branchName || ''}', '${b.address || ''}')">Edit</button>
                 <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/branch/${b._id}')">Delete</button>
             </td>
         </tr>`).join('');
@@ -462,7 +462,6 @@ function renderUserTable(users) {
         <tr>
             <td>${u.userId || ''}</td><td>${u.fullName || ''}</td><td>${u.role || ''}</td><td>${u.branch ? u.branch.branchName : 'N/A'}</td><td>${u.mobileNumber || ''}</td>
             <td>
-                <button type="button" class="action-btn btn-edit" onclick="editUser('${u._id}', '${u.userId || ''}', '${u.fullName || ''}', '${u.role || ''}', '${u.branch ? u.branch._id : ''}', '${u.mobileNumber || ''}')">Edit</button>
                 <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/user/${u._id}')">Delete</button>
             </td>
         </tr>`).join('');
@@ -475,7 +474,6 @@ function renderFarmerTable(farmers) {
         <tr>
             <td>${f.farmerId || ''}</td><td>${f.farmerName || ''}</td><td>${f.supervisor ? f.supervisor.fullName : 'N/A'}</td><td>${f.branch ? f.branch.branchName : 'N/A'}</td><td>${f.mobileNo || ''}</td>
             <td>
-                <button type="button" class="action-btn btn-edit" onclick="editFarmer('${f._id}', '${f.farmerId || ''}', '${f.farmerName || ''}', '${f.supervisor ? f.supervisor._id : ''}', '${f.branch ? f.branch._id : ''}', '${f.mobileNo || ''}', '${f.address || ''}')">Edit</button>
                 <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/farmer/${f._id}')">Delete</button>
             </td>
         </tr>`).join('');
@@ -488,7 +486,6 @@ function renderTraderTable(traders) {
         <tr>
             <td>${t.traderId || ''}</td><td>${t.traderName || ''}</td><td>${t.mobileNo || ''}</td><td>${t.address || ''}</td>
             <td>
-                <button type="button" class="action-btn btn-edit" onclick="editTrader('${t._id}', '${t.traderId || ''}', '${t.traderName || ''}', '${t.mobileNo || ''}', '${t.address || ''}')">Edit</button>
                 <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/trader/${t._id}')">Delete</button>
             </td>
         </tr>`).join('');
@@ -501,7 +498,6 @@ function renderItemTable(items) {
         <tr>
             <td>${i.itemId || ''}</td><td>${i.itemName || ''}</td><td>${i.category || ''}</td><td>${i.unit || ''}</td>
             <td>
-                <button type="button" class="action-btn btn-edit" onclick="editItem('${i._id}', '${i.itemId || ''}', '${i.itemName || ''}', '${i.category || ''}', '${i.unit || ''}')">Edit</button>
                 <button type="button" class="action-btn btn-delete" onclick="deleteRecord('/api/master/item/${i._id}')">Delete</button>
             </td>
         </tr>`).join('');
@@ -1026,11 +1022,16 @@ function openSalePrintSheet(id) {
 async function loadBranchReport() {
     const tbody = document.getElementById('branchReportBody');
     if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading branch report...</td></tr>';
+
     const branchId = document.getElementById('reportBranchSelect')?.value || '';
     const url = branchId ? `/api/reports/branch?branchId=${encodeURIComponent(branchId)}` : '/api/reports/branch';
     try {
         const res = await apiFetch(url);
-        const rows = res.ok ? extractList(await res.json(), ['report', 'branches']) : [];
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.message || 'Branch report load nahi ho paya');
+
+        const rows = extractList(data, ['report', 'branches']);
         tbody.innerHTML = rows.length ? rows.map(r => `
             <tr>
                 <td>${r.branchName || r.name || '-'}</td>
@@ -1039,17 +1040,24 @@ async function loadBranchReport() {
                 <td>${Number(r.closingFeedKg ?? r.closingFeed ?? 0).toFixed(2)} KG</td>
             </tr>
         `).join('') : '<tr><td colspan="4" style="text-align:center;">Koi report data nahi mila.</td></tr>';
-    } catch (_) {}
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#dc2626;">${err.message}</td></tr>`;
+    }
 }
 
 async function loadSupervisorReport() {
     const tbody = document.getElementById('supervisorReportBody');
     if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading supervisor report...</td></tr>';
+
     const supId = document.getElementById('reportSupSelect')?.value || '';
     const url = supId ? `/api/reports/supervisor?supervisorId=${encodeURIComponent(supId)}` : '/api/reports/supervisor';
     try {
         const res = await apiFetch(url);
-        const rows = res.ok ? extractList(await res.json(), ['report', 'supervisors']) : [];
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.message || 'Supervisor report load nahi ho paya');
+
+        const rows = extractList(data, ['report', 'supervisors']);
         tbody.innerHTML = rows.length ? rows.map(r => `
             <tr>
                 <td>${r.supervisorName || r.fullName || '-'}</td>
@@ -1058,15 +1066,22 @@ async function loadSupervisorReport() {
                 <td>${r.liveChicks ?? 0}</td>
             </tr>
         `).join('') : '<tr><td colspan="4" style="text-align:center;">Koi report data nahi mila.</td></tr>';
-    } catch (_) {}
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#dc2626;">${err.message}</td></tr>`;
+    }
 }
 
 async function loadFarmerReport() {
     const tbody = document.getElementById('farmerReportBody');
     if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading farmer report...</td></tr>';
+
     try {
         const res = await apiFetch('/api/reports/farmer');
-        const rows = res.ok ? extractList(await res.json(), ['report', 'farmers']) : [];
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.message || 'Farmer report load nahi ho paya');
+
+        const rows = extractList(data, ['report', 'farmers']);
         tbody.innerHTML = rows.length ? rows.map(r => `
             <tr>
                 <td>${r.farmerName || '-'}</td>
@@ -1077,7 +1092,9 @@ async function loadFarmerReport() {
                 <td>${r.fcr ?? 0}</td>
             </tr>
         `).join('') : '<tr><td colspan="6" style="text-align:center;">Koi report data nahi mila.</td></tr>';
-    } catch (_) {}
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#dc2626;">${err.message}</td></tr>`;
+    }
 }
 
 // =========================================================

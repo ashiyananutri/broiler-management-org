@@ -4,8 +4,23 @@ const DailyEntry = require('../models/DailyEntry');
 const Farmer = require('../models/Farmer');
 const Branch = require('../models/Branch');
 const User = require('../models/User');
+const FeedDispatch = require('../models/FeedDispatch');
 
-// 1. Branch Wise Report (With Total Feed, Avg BW, Total BW & Totals)
+// Helper: Farmer ka Total Feed In (Dispatched KG) nikalne ke liye
+async function getTotalFeedInKg(farmerId) {
+    const dispatches = await FeedDispatch.find({ farmer: farmerId });
+    const totalIn = dispatches.reduce((sum, item) => sum + Number(item.qtyKg || 0), 0);
+    return Number(totalIn.toFixed(2));
+}
+
+// Helper: Closing Feed (Feed In - Feed Consume) nikalne ke liye
+function getClosingFeedKg(totalFeedInKg, totalFeedConsumeKg) {
+    const inKg = Number(totalFeedInKg || 0);
+    const consumeKg = Number(totalFeedConsumeKg || 0);
+    return Number((inKg - consumeKg).toFixed(2));
+}
+
+// 1. Branch Wise Report (With Feed In, Total Feed Consume, Closing Feed & Totals)
 router.get('/branch-wise', async (req, res) => {
     try {
         const { branchId } = req.query;
@@ -17,7 +32,12 @@ router.get('/branch-wise', async (req, res) => {
 
         for (let f of farmers) {
             const lastEntry = await DailyEntry.findOne({ farmer: f._id }).sort({ date: -1 });
+            const totalFeedInKg = await getTotalFeedInKg(f._id);
+            const totalFeedConsumeKg = lastEntry ? Number(lastEntry.totalFeedConsumeKg || 0) : 0;
+            const closingFeedKg = getClosingFeedKg(totalFeedInKg, totalFeedConsumeKg);
+
             report.push({
+                farmerMongoId: f._id,
                 farmerName: f.farmerName,
                 farmerId: f.farmerId,
                 branchName: f.branch ? f.branch.branchName : 'N/A',
@@ -29,7 +49,9 @@ router.get('/branch-wise', async (req, res) => {
                 currentLiveChicks: lastEntry ? lastEntry.currentLiveChicks : 0,
                 avgBodyWeightGram: lastEntry ? lastEntry.avgBodyWeightGram : 0,
                 totalBodyWeightKg: lastEntry ? lastEntry.totalBodyWeightKg : 0,
-                totalFeedConsumeKg: lastEntry ? lastEntry.totalFeedConsumeKg : 0,
+                totalFeedInKg,
+                totalFeedConsumeKg,
+                closingFeedKg,
                 fcr: lastEntry ? lastEntry.fcr : 0
             });
         }
@@ -39,7 +61,7 @@ router.get('/branch-wise', async (req, res) => {
     }
 });
 
-// 2. Supervisor Wise Report (With Total Feed, Avg BW, Total BW & Totals)
+// 2. Supervisor Wise Report (With Feed In, Total Feed Consume, Closing Feed & Totals)
 router.get('/supervisor-wise', async (req, res) => {
     try {
         const { supervisorId } = req.query;
@@ -51,7 +73,12 @@ router.get('/supervisor-wise', async (req, res) => {
 
         for (let f of farmers) {
             const lastEntry = await DailyEntry.findOne({ farmer: f._id }).sort({ date: -1 });
+            const totalFeedInKg = await getTotalFeedInKg(f._id);
+            const totalFeedConsumeKg = lastEntry ? Number(lastEntry.totalFeedConsumeKg || 0) : 0;
+            const closingFeedKg = getClosingFeedKg(totalFeedInKg, totalFeedConsumeKg);
+
             report.push({
+                farmerMongoId: f._id,
                 farmerName: f.farmerName,
                 farmerId: f.farmerId,
                 branchName: f.branch ? f.branch.branchName : 'N/A',
@@ -63,7 +90,9 @@ router.get('/supervisor-wise', async (req, res) => {
                 currentLiveChicks: lastEntry ? lastEntry.currentLiveChicks : 0,
                 avgBodyWeightGram: lastEntry ? lastEntry.avgBodyWeightGram : 0,
                 totalBodyWeightKg: lastEntry ? lastEntry.totalBodyWeightKg : 0,
-                totalFeedConsumeKg: lastEntry ? lastEntry.totalFeedConsumeKg : 0,
+                totalFeedInKg,
+                totalFeedConsumeKg,
+                closingFeedKg,
                 fcr: lastEntry ? lastEntry.fcr : 0
             });
         }
@@ -81,6 +110,10 @@ router.get('/farmer-wise', async (req, res) => {
 
         for (let f of farmers) {
             const lastEntry = await DailyEntry.findOne({ farmer: f._id }).sort({ date: -1 });
+            const totalFeedInKg = await getTotalFeedInKg(f._id);
+            const totalFeedConsumeKg = lastEntry ? Number(lastEntry.totalFeedConsumeKg || 0) : 0;
+            const closingFeedKg = getClosingFeedKg(totalFeedInKg, totalFeedConsumeKg);
+
             report.push({
                 farmerMongoId: f._id,
                 farmerName: f.farmerName,
@@ -94,7 +127,9 @@ router.get('/farmer-wise', async (req, res) => {
                 currentLiveChicks: lastEntry ? lastEntry.currentLiveChicks : 0,
                 avgBodyWeightGram: lastEntry ? lastEntry.avgBodyWeightGram : 0,
                 totalBodyWeightKg: lastEntry ? lastEntry.totalBodyWeightKg : 0,
-                totalFeedConsumeKg: lastEntry ? lastEntry.totalFeedConsumeKg : 0,
+                totalFeedInKg,
+                totalFeedConsumeKg,
+                closingFeedKg,
                 fcr: lastEntry ? lastEntry.fcr : 0
             });
         }
@@ -109,8 +144,20 @@ router.get('/farmer-ledger/:farmerId', async (req, res) => {
     try {
         const { farmerId } = req.params;
         const farmer = await Farmer.findById(farmerId).populate('branch').populate('supervisor');
-        const entries = await DailyEntry.find({ farmer: farmerId }).sort({ date: 1 });
-        res.json({ farmer, entries });
+        const rawEntries = await DailyEntry.find({ farmer: farmerId }).sort({ date: 1 });
+        const totalFeedInKg = await getTotalFeedInKg(farmerId);
+
+        const entries = rawEntries.map((entry) => {
+            const obj = entry.toObject();
+            const consumed = Number(obj.totalFeedConsumeKg || 0);
+            return {
+                ...obj,
+                totalFeedInKg,
+                closingFeedKg: getClosingFeedKg(totalFeedInKg, consumed)
+            };
+        });
+
+        res.json({ farmer, totalFeedInKg, entries });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

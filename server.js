@@ -24,9 +24,15 @@ app.use('/api/entry', entryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/sale', saleRoutes);
 
-// Fallback to index.html for frontend SPA / tabs
-app.get('*', (req, res) => {
+// SPA Fallback (Express 4 & Express 5 safe)
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error('Unhandled Error:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
 // MongoDB Connection & Server Start

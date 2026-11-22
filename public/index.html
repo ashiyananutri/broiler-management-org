@@ -69,6 +69,10 @@
             margin-bottom: 18px;
         }
 
+        body:not(.is-logged-in) #logoutBtn {
+            display: none;
+        }
+
         /* Layout Wrapper */
         .app-shell {
             display: flex;
@@ -178,7 +182,6 @@
             font-size: 13px;
         }
 
-        /* Backdrop for Mobile */
         #backdrop {
             display: none;
             position: fixed;
@@ -191,7 +194,6 @@
             display: block;
         }
 
-        /* Main Area */
         .main-wrapper {
             flex: 1;
             min-width: 0;
@@ -278,7 +280,6 @@
             color: var(--text-dark);
         }
 
-        /* Form Grid */
         .form-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -369,7 +370,6 @@
             font-weight: 600;
         }
 
-        /* Report Controls */
         .report-controls {
             display: flex;
             flex-wrap: wrap;
@@ -387,7 +387,6 @@
             gap: 10px;
         }
 
-        /* Tables */
         .table-responsive {
             width: 100%;
             overflow-x: auto;
@@ -413,12 +412,6 @@
             background: #f8fafc;
             color: #334155;
             font-weight: 700;
-        }
-
-        tfoot td {
-            background: #f1f5f9;
-            font-weight: 700;
-            border-top: 2px solid #cbd5e1;
         }
 
         .action-btn {
@@ -461,7 +454,6 @@
             font-weight: 700;
         }
 
-        /* Ledger Modal */
         #ledgerModal {
             display: none;
             position: fixed;
@@ -476,8 +468,8 @@
         .modal-box {
             background: var(--white);
             width: 100%;
-            max-width: 1020px;
-            max-height: 88vh;
+            max-width: 1060px;
+            max-height: 90vh;
             overflow-y: auto;
             border-radius: 12px;
             padding: 20px;
@@ -489,10 +481,9 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
 
-        /* Mobile Responsive Optimization */
         @media (max-width: 768px) {
             #sidebar {
                 position: fixed;
@@ -536,10 +527,6 @@
                 margin-bottom: 14px;
             }
 
-            .card-title {
-                font-size: 15.5px;
-            }
-
             .form-grid {
                 grid-template-columns: 1fr;
                 gap: 10px;
@@ -560,42 +547,6 @@
             .form-actions button {
                 width: 100%;
                 padding: 11px 14px;
-            }
-
-            .report-controls,
-            .filter-group,
-            .export-buttons {
-                flex-direction: column;
-                align-items: stretch;
-                width: 100%;
-                gap: 8px;
-            }
-
-            .filter-group select,
-            .filter-group button,
-            .export-buttons button {
-                width: 100%;
-            }
-
-            th,
-            td {
-                padding: 8px 9px;
-                font-size: 12.5px;
-            }
-
-            .action-btn {
-                padding: 5px 8px;
-                font-size: 11.5px;
-            }
-
-            .modal-box {
-                width: 96%;
-                padding: 14px;
-                max-height: 90vh;
-            }
-
-            .login-box {
-                padding: 20px 16px;
             }
         }
     </style>
@@ -620,7 +571,6 @@
         </form>
     </div>
 
-    <!-- Mobile Sidebar Backdrop -->
     <div id="backdrop" onclick="toggleSidebar()"></div>
 
     <div class="app-shell">
@@ -920,12 +870,16 @@
                             <input type="hidden" id="editItemId">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="itemCode">Item Code</label>
-                                    <input type="text" id="itemCode" required placeholder="Item Code">
+                                    <label for="itemId">Item ID</label>
+                                    <input type="text" id="itemId" required placeholder="Item ID">
                                 </div>
                                 <div class="form-group">
                                     <label for="itemName">Item Name</label>
                                     <input type="text" id="itemName" required placeholder="Item Name">
+                                </div>
+                                <div class="form-group">
+                                    <label for="itemCategory">Category</label>
+                                    <input type="text" id="itemCategory" required placeholder="Feed / Medicine">
                                 </div>
                                 <div class="form-group">
                                     <label for="itemUnit">Unit</label>
@@ -943,7 +897,7 @@
                         <div class="table-responsive">
                             <table>
                                 <thead>
-                                    <tr><th>Item Code</th><th>Item Name</th><th>Unit</th><th>Actions</th></tr>
+                                    <tr><th>Item ID</th><th>Item Name</th><th>Category</th><th>Unit</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody id="itemTableBody"></tbody>
                             </table>
@@ -956,18 +910,19 @@
                     <div class="card">
                         <div class="card-title">Chicks Placement</div>
                         <form id="chicksForm">
+                            <input type="hidden" id="editPlacementMongoId">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="cpDate">Date</label>
-                                    <input type="date" id="cpDate" required>
+                                    <label for="cDate">Date</label>
+                                    <input type="date" id="cDate" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="cpFarmer">Farmer</label>
-                                    <select id="cpFarmer" required></select>
+                                    <label for="cFarmer">Farmer</label>
+                                    <select id="cFarmer" required></select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="cpQty">Chicks Qty</label>
-                                    <input type="number" id="cpQty" required min="1">
+                                    <label for="cQty">Chicks Qty</label>
+                                    <input type="number" id="cQty" required min="1">
                                 </div>
                             </div>
                             <div class="form-actions">
@@ -976,6 +931,17 @@
                             </div>
                         </form>
                     </div>
+                    <div class="card">
+                        <div class="card-title">Chicks Placement List</div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr><th>Placement ID</th><th>Date</th><th>Farmer</th><th>Branch</th><th>Chicks Qty</th><th>Actions</th></tr>
+                                </thead>
+                                <tbody id="chicksTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Feed Dispatch -->
@@ -983,18 +949,25 @@
                     <div class="card">
                         <div class="card-title">Feed Dispatch</div>
                         <form id="feedForm">
+                            <input type="hidden" id="editFeedMongoId">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="fdDate">Date</label>
-                                    <input type="date" id="fdDate" required>
+                                    <label for="feedDate">Date</label>
+                                    <input type="date" id="feedDate" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="fdFarmer">Farmer</label>
-                                    <select id="fdFarmer" required></select>
+                                    <label for="feedFarmer">Farmer</label>
+                                    <select id="feedFarmer" required></select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="fdQty">Feed Qty (KG)</label>
-                                    <input type="number" id="fdQty" step="0.01" required min="0.01">
+                                    <label for="feedType">Feed Type</label>
+                                    <select id="feedType" required>
+                                        <option value="Broiler Feed">Broiler Feed</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="qtyKg">Feed Qty (KG) <span id="bagCalcText" style="color:#059669;"></span></label>
+                                    <input type="number" id="qtyKg" step="0.01" required min="0.01" oninput="calculateBags()">
                                 </div>
                             </div>
                             <div class="form-actions">
@@ -1002,6 +975,17 @@
                                 <span id="fdMsg" class="status-msg"></span>
                             </div>
                         </form>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Feed Dispatch List</div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr><th>Challan No</th><th>Date</th><th>Farmer</th><th>Feed Type</th><th>Qty (KG)</th><th>Bags</th><th>Status</th><th>Actions</th></tr>
+                                </thead>
+                                <tbody id="feedTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
 
@@ -1078,26 +1062,27 @@
                     <div class="card">
                         <div class="card-title">Daily Farm Log</div>
                         <form id="dailyLogForm">
+                            <input type="hidden" id="editDailyMongoId">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="dlDate">Date</label>
-                                    <input type="date" id="dlDate" required>
+                                    <label for="dailyDate">Date</label>
+                                    <input type="date" id="dailyDate" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="dlFarmer">Farmer</label>
-                                    <select id="dlFarmer" required></select>
+                                    <label for="dailyFarmer">Farmer</label>
+                                    <select id="dailyFarmer" required></select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="dlMortality">Mortality</label>
-                                    <input type="number" id="dlMortality" min="0" value="0">
+                                    <label for="dayMortality">Day Mortality</label>
+                                    <input type="number" id="dayMortality" min="0" value="0">
                                 </div>
                                 <div class="form-group">
-                                    <label for="dlFeedConsumed">Feed Consumed (KG)</label>
-                                    <input type="number" id="dlFeedConsumed" step="0.01" min="0" value="0">
+                                    <label for="dayFeedConsumeKg">Feed Consumed (KG)</label>
+                                    <input type="number" id="dayFeedConsumeKg" step="0.01" min="0" value="0">
                                 </div>
                                 <div class="form-group">
-                                    <label for="dlAvgWeight">Avg Body Weight (KG)</label>
-                                    <input type="number" id="dlAvgWeight" step="0.001" min="0" value="0">
+                                    <label for="avgBodyWeightGram">Avg Body Weight (Gram)</label>
+                                    <input type="number" id="avgBodyWeightGram" step="1" min="0" value="0">
                                 </div>
                             </div>
                             <div class="form-actions">
@@ -1106,15 +1091,87 @@
                             </div>
                         </form>
                     </div>
+                    <div class="card">
+                        <div class="card-title">Daily Farm Logs List</div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th><th>Farmer</th><th>Days</th><th>Placement</th>
+                                        <th>Day Mort.</th><th>Total Mort.</th><th>Live Chicks</th>
+                                        <th>Avg BW</th><th>Total BW</th><th>Feed In</th>
+                                        <th>Feed Consumed</th><th>Closing Feed</th><th>FCR</th><th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dailyTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Sale / Lifting Entry -->
                 <section id="saleEntryTab" class="page-section">
                     <div class="card">
-                        <div class="card-title">Sale / Lifting Entry</div>
-                        <p style="color: var(--text-muted); font-size: 13.5px;">
-                            Sale / Lifting entry aur slip details yahan manage ki jaati hain.
-                        </p>
+                        <div class="card-title">Sale / Bird Lifting Entry</div>
+                        <form id="saleEntryForm">
+                            <input type="hidden" id="editSaleMongoId">
+                            <div class="form-grid">
+                                <div class="form-group"><label for="saleSlNo">Sl. No.</label><input type="text" id="saleSlNo"></div>
+                                <div class="form-group"><label for="saleDate">Date</label><input type="date" id="saleDate"></div>
+                                <div class="form-group"><label for="saleSupervisor">Lifting Supervisor</label><select id="saleSupervisor"></select></div>
+                                <div class="form-group"><label for="saleTrader">Trader Name</label><select id="saleTrader"></select></div>
+                                <div class="form-group"><label for="saleFarmer">Farmer Name</label><select id="saleFarmer" onchange="autofillSaleFarmerDetails()"></select></div>
+                                <div class="form-group"><label for="saleBranch">Branch</label><input type="text" id="saleBranch" readonly></div>
+                                <div class="form-group"><label for="wtStartTime">Wt. Starting Time</label><input type="time" id="wtStartTime"></div>
+                                <div class="form-group"><label for="wtCloseTime">Wt. Closing Time</label><input type="time" id="wtCloseTime"></div>
+                                <div class="form-group"><label for="saleDriver">Driver Name</label><input type="text" id="saleDriver"></div>
+                                <div class="form-group"><label for="saleVehicle">Vehicle No.</label><input type="text" id="saleVehicle"></div>
+                                <div class="form-group"><label for="saleRate">Rate</label><input type="number" step="0.01" id="saleRate"></div>
+                                <div class="form-group"><label for="saleAge">Age</label><input type="number" id="saleAge"></div>
+                                <div class="form-group"><label for="saleLsName">L.S. Name</label><input type="text" id="saleLsName"></div>
+                                <div class="form-group"><label for="saleFeedClosing">Feed Closing Stock</label><input type="text" id="saleFeedClosing"></div>
+                                <div class="form-group"><label for="saleBirdStock">Bird Stock</label><input type="text" id="saleBirdStock"></div>
+                                <div class="form-group"><label for="saleWeakBirds">Weak Birds</label><input type="text" id="saleWeakBirds"></div>
+                                <div class="form-group"><label for="saleTotalPcs">Total Birds</label><input type="number" id="saleTotalPcs" readonly></div>
+                                <div class="form-group"><label for="saleTotalWeight">Total Weight (Kg)</label><input type="number" step="0.01" id="saleTotalWeight" readonly></div>
+                                <div class="form-group"><label for="saleAvgBodyWeight">Avg. Body Weight (Kg)</label><input type="number" step="0.001" id="saleAvgBodyWeight" readonly></div>
+                            </div>
+
+                            <div class="table-responsive" style="margin-top: 14px;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Sl.</th><th>Birds</th><th>Wt (Kg)</th>
+                                            <th>Sl.</th><th>Birds</th><th>Wt (Kg)</th>
+                                            <th>Sl.</th><th>Birds</th><th>Wt (Kg)</th>
+                                            <th>Sl.</th><th>Birds</th><th>Wt (Kg)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="liftingInputBody"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" id="saleSaveBtn" class="btn-primary">Save Sale Entry</button>
+                                <button type="button" class="btn-secondary" onclick="resetSaleForm()">Reset</button>
+                                <span id="saleMsg" class="status-msg"></span>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">Sale / Lifting Entries List</div>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Sl. No.</th><th>Date</th><th>Party</th><th>Farmer</th>
+                                        <th>Supervisor</th><th>Total Birds</th><th>Total Wt</th><th>Avg Wt</th><th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="saleTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
 
@@ -1122,6 +1179,12 @@
                 <section id="branchReportTab" class="page-section">
                     <div class="card">
                         <div class="card-title">Branch-wise Report</div>
+                        <div class="report-controls">
+                            <div class="filter-group">
+                                <select id="reportBranchSelect"><option value="">-- Sabhi Branches --</option></select>
+                                <button type="button" class="btn-primary" onclick="loadBranchReport()">Load Report</button>
+                            </div>
+                        </div>
                         <div class="table-responsive">
                             <table>
                                 <thead><tr><th>Branch</th><th>Farmers</th><th>Live Chicks</th><th>Closing Feed</th></tr></thead>
@@ -1134,6 +1197,12 @@
                 <section id="supervisorReportTab" class="page-section">
                     <div class="card">
                         <div class="card-title">Supervisor-wise Report</div>
+                        <div class="report-controls">
+                            <div class="filter-group">
+                                <select id="reportSupSelect"><option value="">-- Sabhi Supervisors --</option></select>
+                                <button type="button" class="btn-primary" onclick="loadSupervisorReport()">Load Report</button>
+                            </div>
+                        </div>
                         <div class="table-responsive">
                             <table>
                                 <thead><tr><th>Supervisor</th><th>Branch</th><th>Farmers</th><th>Live Chicks</th></tr></thead>
@@ -1158,12 +1227,17 @@
         </div>
     </div>
 
+    <div id="liftingPrintableArea" style="display:none;"></div>
+
     <!-- Ledger Modal -->
     <div id="ledgerModal">
         <div class="modal-box">
             <div class="modal-header">
                 <h3 id="ledgerModalTitle">Ledger</h3>
-                <button type="button" class="btn-secondary" onclick="closeLedgerModal()">Close</button>
+                <div>
+                    <button type="button" class="btn-primary" onclick="window.print()">Print</button>
+                    <button type="button" class="btn-secondary" onclick="closeLedgerModal()">Close</button>
+                </div>
             </div>
             <div id="ledgerModalBody"></div>
         </div>
@@ -1207,6 +1281,15 @@
 
             if (tabId === 'feedTransferTab' && typeof initFeedTransferModule === 'function') {
                 initFeedTransferModule();
+            }
+            if (tabId === 'branchReportTab' && typeof loadBranchReport === 'function') {
+                loadBranchReport();
+            }
+            if (tabId === 'supervisorReportTab' && typeof loadSupervisorReport === 'function') {
+                loadSupervisorReport();
+            }
+            if (tabId === 'farmerReportTab' && typeof loadFarmerReport === 'function') {
+                loadFarmerReport();
             }
         }
 

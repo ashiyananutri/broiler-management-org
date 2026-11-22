@@ -11,14 +11,20 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes Import
-const authRoutes = require('./routes/auth');
 const masterRoutes = require('./routes/master');
 const entryRoutes = require('./routes/entry');
 const reportRoutes = require('./routes/report');
 const saleRoutes = require('./routes/sale');
 
+// Optional Auth Route (agar routes/auth.js मौजूद ho toh mount karega)
+try {
+    const authRoutes = require('./routes/auth');
+    app.use('/api/auth', authRoutes);
+} catch (err) {
+    console.log('Optional route ./routes/auth not found, skipping...');
+}
+
 // Mount API Routes
-app.use('/api/auth', authRoutes);
 app.use('/api/master', masterRoutes);
 app.use('/api/entry', entryRoutes);
 app.use('/api/reports', reportRoutes);

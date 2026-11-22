@@ -43,7 +43,11 @@ app.use((err, req, res, next) => {
 
 // MongoDB Connection & Server Start
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
+const MONGO_URI =
+    process.env.MONGO_URI ||
+    process.env.MONGODB_URI ||
+    process.env.DATABASE_URL ||
+    process.env.DB_URL;
 
 if (!MONGO_URI) {
     console.error('Error: MONGO_URI / MONGODB_URI environment variable is not set!');

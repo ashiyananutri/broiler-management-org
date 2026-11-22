@@ -1,34 +1,51 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
 const path = require('path');
 
 const app = express();
-app.use(express.json());
-app.use(cors());
 
-// Serve static frontend files from 'public' folder
+// Middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// MongoDB Atlas Connection
-const MONGO_URI = 'mongodb+srv://ashiyanafeedtraders1_db_user:rishu123456@cluster0.qk1qbgl.mongodb.net/broiler_db?retryWrites=true&w=majority&compressors=zlib';
+// Routes Import
+const authRoutes = require('./routes/auth');
+const masterRoutes = require('./routes/master');
+const entryRoutes = require('./routes/entry');
+const reportRoutes = require('./routes/report');
+const saleRoutes = require('./routes/sale');
 
-mongoose.connect(MONGO_URI)
-.then(() => console.log('MongoDB Atlas Connected Successfully!'))
-.catch(err => console.error('Database connection error:', err));
+// Mount API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/master', masterRoutes);
+app.use('/api/entry', entryRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/sale', saleRoutes);
 
-// API Routes Registration
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/master', require('./routes/master'));
-app.use('/api/entry', require('./routes/entry'));
-// Server.js me routes register karne wale section me yeh line jodd dein:
-app.use('/api/reports', require('./routes/report'));
-// Serve Index HTML on root route
-app.get('/', (req, res) => {
+// Fallback to index.html for frontend SPA / tabs
+app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+// MongoDB Connection & Server Start
+const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
+
+if (!MONGO_URI) {
+    console.error('Error: MONGO_URI / MONGODB_URI environment variable is not set!');
+    process.exit(1);
+}
+
+mongoose.connect(MONGO_URI)
+    .then(() => {
+        console.log('MongoDB connected successfully');
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    })
+    .catch((err) => {
+        console.error('MongoDB connection error:', err.message);
+        process.exit(1);
+    });

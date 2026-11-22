@@ -1,6 +1,7 @@
 let allSupervisors = [];
 let allBranches = [];
 let allFarmers = [];
+let allFeedDispatches = [];
 let currentUser = null;
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -159,14 +160,25 @@ async function loadReportDropdowns() {
 
 async function loadEntriesData() {
     try {
-        const placementRes = await fetch('/api/entry/chicks-placement');
+        const [placementRes, feedRes, dailyRes] = await Promise.all([
+            fetch('/api/entry/chicks-placement'),
+            fetch('/api/entry/feed-dispatch'),
+            fetch('/api/entry/daily-entry')
+        ]);
+
         if(placementRes.ok) renderChicksTable(await placementRes.json());
 
-        const feedRes = await fetch('/api/entry/feed-dispatch');
-        if(feedRes.ok) renderFeedTable(await feedRes.json());
+        let feeds = [];
+        if(feedRes.ok) {
+            feeds = await feedRes.json();
+            allFeedDispatches = feeds;
+            renderFeedTable(feeds);
+        }
 
-        const dailyRes = await fetch('/api/entry/daily-entry');
-        if(dailyRes.ok) renderDailyTable(await dailyRes.json());
+        if(dailyRes.ok) {
+            const dailies = await dailyRes.json();
+            renderDailyTable(dailies, feeds);
+        }
     } catch (e) {
         console.log("Entries load error:", e);
     }
@@ -307,10 +319,32 @@ async function approveFeedDispatch(id) {
     } catch(e) { alert("Server Error!"); }
 }
 
-function renderDailyTable(entries) {
+function getFarmerTotalFeedIn(farmerId, feedsList = allFeedDispatches) {
+    if (!farmerId || !Array.isArray(feedsList)) return 0;
+    return feedsList
+        .filter(f => {
+            const fId = f.farmer && f.farmer._id ? f.farmer._id : f.farmer;
+            return String(fId) === String(farmerId);
+        })
+        .reduce((sum, f) => sum + Number(f.qtyKg || 0), 0);
+}
+
+function renderDailyTable(entries, feedsList = allFeedDispatches) {
     const tbody = document.getElementById('dailyTableBody');
     if(!tbody) return;
-    tbody.innerHTML = entries.map(d => `
+    tbody.innerHTML = entries.map(d => {
+        const farmerId = d.farmer && d.farmer._id ? d.farmer._id : d.farmer;
+        const feedIn = d.totalFeedInKg !== undefined
+            ? Number(d.totalFeedInKg)
+            : getFarmerTotalFeedIn(farmerId, feedsList);
+        const totalFeedConsume = Number(d.totalFeedConsumeKg || 0);
+        const closingFeed = d.closingFeedKg !== undefined
+            ? Number(d.closingFeedKg)
+            : Number((feedIn - totalFeedConsume).toFixed(2));
+
+        const closingColor = closingFeed < 0 ? '#ef4444' : '#059669';
+
+        return `
         <tr>
             <td>${d.date ? new Date(d.date).toLocaleDateString('en-GB') : ''}</td>
             <td>${d.farmer ? d.farmer.farmerName : 'N/A'}</td>
@@ -321,16 +355,19 @@ function renderDailyTable(entries) {
             <td style="color:#10b981; font-weight:600;">${d.currentLiveChicks || 0}</td>
             <td>${d.avgBodyWeightGram || 0} g</td>
             <td style="font-weight:600; color:#2563eb;">${d.totalBodyWeightKg || 0} KG</td>
-            <td>${d.totalFeedConsumeKg || 0} KG</td>
+            <td>${feedIn.toFixed(2)} KG</td>
+            <td>${totalFeedConsume.toFixed(2)} KG</td>
+            <td style="font-weight:700; color:${closingColor};">${closingFeed.toFixed(2)} KG</td>
             <td style="font-weight:bold;">${d.fcr || 0}</td>
             <td>
-                <button class="action-btn btn-edit" onclick="editDaily('${d._id}', '${d.date ? d.date.split('T')[0] : ''}', '${d.farmer ? d.farmer._id : ''}', '${d.dayMortality}', '${d.dayFeedConsumeKg}', '${d.avgBodyWeightGram}')">Edit</button>
+                <button class="action-btn btn-edit" onclick="editDaily('${d._id}', '${d.date ? d.date.split('T')[0] : ''}', '${farmerId || ''}', '${d.dayMortality}', '${d.dayFeedConsumeKg}', '${d.avgBodyWeightGram}')">Edit</button>
                 <button class="action-btn btn-delete" onclick="deleteRecord('/api/entry/daily-entry/${d._id}')">Delete</button>
             </td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 }
 
-// --- REPORT LOADERS WITH TOTALS & CLICKABLE LEDGER ---
+// --- REPORT LOADERS WITH CLOSING FEED, TOTALS & CLICKABLE LEDGER ---
 function loadReportData(type) {
     if(type === 'branch') {
         const branchId = document.getElementById('reportBranchSelect').value;
@@ -353,20 +390,36 @@ function renderReportTable(data, tbodyId, tfootId, isFarmerWise) {
     const tbody = document.getElementById(tbodyId);
     const tfoot = document.getElementById(tfootId);
 
-    if(data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:#64748b;">Koi data nahi mila</td></tr>`;
+    if(!Array.isArray(data) || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; color:#64748b;">Koi data nahi mila</td></tr>`;
         tfoot.innerHTML = '';
         return;
     }
 
-    let totPlacement = 0, totMortality = 0, totLive = 0, totWeight = 0, totFeed = 0;
+    let totPlacement = 0, totMortality = 0, totLive = 0, totWeight = 0, totFeedIn = 0, totFeed = 0, totClosingFeed = 0;
 
     tbody.innerHTML = data.map(r => {
-        totPlacement += (r.totalPlacementChicks || 0);
-        totMortality += (r.totalMortality || 0);
-        totLive += (r.currentLiveChicks || 0);
-        totWeight += (r.totalBodyWeightKg || 0);
-        totFeed += (r.totalFeedConsumeKg || 0);
+        const placement = Number(r.totalPlacementChicks || 0);
+        const mortality = Number(r.totalMortality || 0);
+        const live = Number(r.currentLiveChicks || 0);
+        const weight = Number(r.totalBodyWeightKg || 0);
+        const feedConsume = Number(r.totalFeedConsumeKg || 0);
+        const feedIn = r.totalFeedInKg !== undefined
+            ? Number(r.totalFeedInKg)
+            : getFarmerTotalFeedIn(r.farmerMongoId);
+        const closingFeed = r.closingFeedKg !== undefined
+            ? Number(r.closingFeedKg)
+            : Number((feedIn - feedConsume).toFixed(2));
+
+        totPlacement += placement;
+        totMortality += mortality;
+        totLive += live;
+        totWeight += weight;
+        totFeedIn += feedIn;
+        totFeed += feedConsume;
+        totClosingFeed += closingFeed;
+
+        const closingColor = closingFeed < 0 ? '#ef4444' : '#059669';
 
         let farmerCol = isFarmerWise 
             ? `<a href="#" onclick="openFarmerLedger('${r.farmerMongoId}', '${r.farmerName}', '${r.farmerId}')" style="color:#2563eb; font-weight:bold; text-decoration:underline;">${r.farmerName} (${r.farmerId})</a>`
@@ -378,16 +431,20 @@ function renderReportTable(data, tbodyId, tfootId, isFarmerWise) {
                 <td>${r.branchName}</td>
                 <td>${r.supervisorName}</td>
                 <td>${r.age} Days</td>
-                <td style="color:#2563eb; font-weight:600;">${r.totalPlacementChicks}</td>
-                <td style="color:#ef4444; font-weight:600;">${r.totalMortality} (${r.mortalityPercentage}%)</td>
-                <td style="color:#10b981; font-weight:600;">${r.currentLiveChicks}</td>
-                <td>${r.avgBodyWeightGram} g</td>
-                <td style="color:#2563eb; font-weight:600;">${r.totalBodyWeightKg} KG</td>
-                <td>${r.totalFeedConsumeKg} KG</td>
-                <td style="font-weight:bold;">${r.fcr}</td>
+                <td style="color:#2563eb; font-weight:600;">${placement}</td>
+                <td style="color:#ef4444; font-weight:600;">${mortality} (${r.mortalityPercentage || 0}%)</td>
+                <td style="color:#10b981; font-weight:600;">${live}</td>
+                <td>${r.avgBodyWeightGram || 0} g</td>
+                <td style="color:#2563eb; font-weight:600;">${weight.toFixed(2)} KG</td>
+                <td>${feedIn.toFixed(2)} KG</td>
+                <td>${feedConsume.toFixed(2)} KG</td>
+                <td style="font-weight:700; color:${closingColor};">${closingFeed.toFixed(2)} KG</td>
+                <td style="font-weight:bold;">${r.fcr || 0}</td>
             </tr>
         `;
     }).join('');
+
+    const grandClosingColor = totClosingFeed < 0 ? '#ef4444' : '#059669';
 
     tfoot.innerHTML = `
         <tr>
@@ -397,7 +454,9 @@ function renderReportTable(data, tbodyId, tfootId, isFarmerWise) {
             <td style="color:#10b981;">${totLive}</td>
             <td>-</td>
             <td style="color:#2563eb;">${totWeight.toFixed(2)} KG</td>
+            <td>${totFeedIn.toFixed(2)} KG</td>
             <td>${totFeed.toFixed(2)} KG</td>
+            <td style="color:${grandClosingColor};">${totClosingFeed.toFixed(2)} KG</td>
             <td>-</td>
         </tr>
     `;
@@ -410,17 +469,30 @@ async function openFarmerLedger(farmerMongoId, farmerName, farmerId) {
         const data = await res.json();
         
         document.getElementById('modalFarmerTitle').innerText = `Ledger History: ${farmerName} (${farmerId})`;
+        const feedIn = data.totalFeedInKg !== undefined
+            ? Number(data.totalFeedInKg)
+            : getFarmerTotalFeedIn(farmerMongoId);
+
         document.getElementById('modalFarmerInfo').innerHTML = `
             <b>Branch:</b> ${data.farmer.branch ? data.farmer.branch.branchName : 'N/A'} | 
             <b>Supervisor:</b> ${data.farmer.supervisor ? data.farmer.supervisor.fullName : 'N/A'} | 
-            <b>Mobile:</b> ${data.farmer.mobileNo || 'N/A'}
+            <b>Mobile:</b> ${data.farmer.mobileNo || 'N/A'} | 
+            <b>Total Feed In:</b> ${feedIn.toFixed(2)} KG
         `;
 
         const tbody = document.getElementById('modalLedgerBody');
-        if(data.entries.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;">Koi daily log entry nahi mili</td></tr>`;
+        if(!data.entries || data.entries.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;">Koi daily log entry nahi mili</td></tr>`;
         } else {
-            tbody.innerHTML = data.entries.map(e => `
+            tbody.innerHTML = data.entries.map(e => {
+                const consumed = Number(e.totalFeedConsumeKg || 0);
+                const rowFeedIn = e.totalFeedInKg !== undefined ? Number(e.totalFeedInKg) : feedIn;
+                const closing = e.closingFeedKg !== undefined
+                    ? Number(e.closingFeedKg)
+                    : Number((rowFeedIn - consumed).toFixed(2));
+                const closingColor = closing < 0 ? '#ef4444' : '#059669';
+
+                return `
                 <tr>
                     <td>${new Date(e.date).toLocaleDateString('en-GB')}</td>
                     <td>${e.days} Days</td>
@@ -429,10 +501,12 @@ async function openFarmerLedger(farmerMongoId, farmerName, farmerId) {
                     <td style="color:#10b981; font-weight:600;">${e.currentLiveChicks}</td>
                     <td>${e.avgBodyWeightGram || 0} g</td>
                     <td style="font-weight:600; color:#2563eb;">${e.totalBodyWeightKg || 0} KG</td>
-                    <td>${e.totalFeedConsumeKg || 0} KG</td>
+                    <td>${consumed.toFixed(2)} KG</td>
+                    <td style="font-weight:700; color:${closingColor};">${closing.toFixed(2)} KG</td>
                     <td style="font-weight:bold;">${e.fcr || 0}</td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
         }
 
         document.getElementById('ledgerModal').style.display = 'flex';
@@ -656,7 +730,6 @@ function toggleSidebar() {
     }
 }
 
-// --- AUTO-HIDE SIDEBAR & AUTO-REFRESH REPORTS ON TAB SWITCH ---
 function switchTab(tabId, element) {
     document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
     document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
@@ -677,7 +750,6 @@ function switchTab(tabId, element) {
     }
 }
 
-// --- REFRESH ACTIVE REPORT HELPER ---
 function refreshActiveReportTab() {
     if(document.getElementById('branchReportTab').classList.contains('active')) {
         loadReportData('branch');

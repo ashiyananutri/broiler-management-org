@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const feedTransferSchema = new mongoose.Schema({
     transferNo: {
         type: String,
-        unique: true
+        required: true,
+        unique: true,
+        trim: true
     },
     date: {
         type: Date,
@@ -17,7 +19,8 @@ const feedTransferSchema = new mongoose.Schema({
     },
     fromFarmerName: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
     toFarmer: {
         type: mongoose.Schema.Types.ObjectId,
@@ -26,11 +29,13 @@ const feedTransferSchema = new mongoose.Schema({
     },
     toFarmerName: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
     feedType: {
         type: String,
-        default: 'Broiler Feed'
+        default: 'Broiler Feed',
+        trim: true
     },
     qtyKg: {
         type: Number,
@@ -39,11 +44,13 @@ const feedTransferSchema = new mongoose.Schema({
     },
     remarks: {
         type: String,
-        default: ''
+        default: '',
+        trim: true
     },
     createdBy: {
         type: String,
-        default: ''
+        default: '',
+        trim: true
     }
 }, { timestamps: true });
 

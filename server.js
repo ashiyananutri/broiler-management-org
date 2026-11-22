@@ -49,12 +49,8 @@ const MONGO_URI =
     process.env.MONGO_URI ||
     process.env.MONGODB_URI ||
     process.env.DATABASE_URL ||
-    process.env.DB_URL;
-
-if (!MONGO_URI) {
-    console.error('Error: MONGO_URI / MONGODB_URI environment variable is not set!');
-    process.exit(1);
-}
+    process.env.DB_URL ||
+    'mongodb+srv://ashiyanafeedtraders1_db_user:rishu123456@cluster0.qk1qbgl.mongodb.net/broiler_db?retryWrites=true&w=majority&compressors=zlib';
 
 mongoose.connect(MONGO_URI)
     .then(() => {
